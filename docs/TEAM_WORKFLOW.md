@@ -1,43 +1,60 @@
-# ContextCue — two-person Git + Codex workflow
+# ContextCue — two-person Git + Codex workflow (main-first)
 
-## Phase 0: before the second developer joins
-- The repository is public; keep secrets and real student/medical data out of Git.
-- Prefer small changes and green CI. Before publishing any change, run checks for touched components.
-- Avoid force pushes and deleting `main`. For now, do not require one PR review: the sole maintainer cannot approve their own PR.
-- After changing files via the GitHub interface or ChatGPT GitHub connection, sync local checkout with `git pull --ff-only` before continuing.
+## Working agreement
+- **Default: one shared `main` branch.** Small, tested work can be committed and pushed directly; a PR or code-review approval is not required.
+- Developers work at different times where possible and communicate what they plan to edit. Backend/planner/guardrails mainly use `backend/**`; frontend/perception/cues mainly use `frontend/**`.
+- Coordinate changes to shared API files first. `backend/app/schemas.py` is the source of truth and `frontend/src/types.ts` is its mirror.
+- Keep changes small, run relevant checks, and do not upload a knowingly broken demo.
+- **Use a separate branch only if needed:** substantial architecture changes, risky model/perception experiments, sweeping cross-module edits, or work that must remain incomplete for multiple sessions.
+- Do not require PRs or approving reviews merely because a second developer joins. CI should continue running automatically.
+- Codex may propose and edit code but **must ask before committing or pushing**; never force-push or discard someone else's work.
 
-## Phase 1: both developers active
-1. Each developer clones the same repo and runs `uv sync --group dev` in `backend/` and `npm ci` in `frontend/`.
-2. Agree on tasks and the request/response schema before parallel coding.
-3. Backend/planner/feasibility owner mainly edits `backend/**`; frontend/perception/cue owner mainly edits `frontend/**`. For shared API changes, pair or coordinate a single PR.
-4. Start a scoped branch from current `main`:
+## Start of each work session (PowerShell, repository root)
+```powershell
+git status
+git branch --show-current
+git pull --ff-only origin main
+```
+Only pull when on `main` with a clean working tree. If it is not clean, inspect and preserve the changes first. If the pull fails, resolve the cause instead of using reset or force.
+
+## End of each work session
+1. Run the relevant tests; check `git status` and review the changed files for secrets or unrelated edits.
+2. Commit only the intended files. Examples:
    ```powershell
-   git switch main
-   git pull --ff-only
-   git switch -c feat/short-topic
+   git add backend/app/planner.py backend/tests/test_planner.py
+   git commit -m "feat: refine planner validation"
+   git push origin main
    ```
-5. Change only the scoped feature, add tests, and run required checks.
-6. Push the branch and open a PR with summary, test results, screenshot/demo evidence if UI changes, and risk/limitations. Ask the other person for review.
-7. Merge only after CI passes and the reviewer approves. Delete the feature branch, pull the updated `main`, then start the next task.
+3. If push is rejected (the other developer pushed first), **do not force push**. Review and safely incorporate remote changes; rerun checks before retrying. Coordinate if both developers edited the same file.
+4. Tell the teammate what changed, test outcomes, and any known limitations. After edits made through GitHub web/ChatGPT connection, run `git pull --ff-only origin main` before new local edits.
 
-## Shared contract and merge hygiene
-- Source of truth: `backend/app/schemas.py`; mirror: `frontend/src/types.ts`. Keep both consistent.
+## When using an optional feature branch
+```powershell
+git switch main
+git pull --ff-only origin main
+git switch -c feat/short-topic
+```
+Test work separately and merge into `main` when ready, preferably through a PR if review helps. No mandatory PR for routine work.
+
+## Shared API / merge hygiene
 - Agree on status values before changing them: `cue`, `needs_confirmation`, `needs_assistance`, `unavailable`.
-- Do not concurrently modify the same API/schema files in separate branches without coordination.
-- Never use `git push --force` to solve an ordinary conflict; resolve the merge/rebase intentionally.
-- Codex instructions live in root and scoped `AGENTS.md` files. Codex may edit code but does not decide to push or merge on its own.
+- Update both Python and TypeScript schemas/callers/tests in coordinated changes.
+- Never use `git push --force` to solve an ordinary conflict; resolve intentionally.
+- Codex instructions live in the root `AGENTS.md` and scoped `backend/AGENTS.md`, `frontend/AGENTS.md`.
 
-## Required verification
+## Verification
 - Backend: `uv run pytest`, `uv run ruff check .` from `backend/`.
 - Frontend: `npm run typecheck`, `npm run build` from `frontend/`.
-- GitHub Actions `.github/workflows/ci.yml` runs both.
-- Keep a stable release tag or demo branch before risky late-stage experiments.
+- GitHub Actions `.github/workflows/ci.yml` runs both on pushes.
+- Preserve a known-good release tag or demo branch before risky late-stage work.
 
-## Evidence labels
+## Evidence labels & privacy
 - `DEMO_SCENE`: staged/synthetic scene observations.
-- `DEMO_RULES`: local deterministic planning without a Nebius model call.
-- `LIVE_NEBIUS`: verified runtime call to Nebius/NVIDIA model.
+- `DEMO_RULES`: local deterministic planning without a Nebius call.
+- `LIVE_NEBIUS`: a verified Nebius/NVIDIA runtime call.
+- Do not commit secrets, real disability profiles, student footage, or raw sensitive data.
 
-## Repo rules migration
-- While solo: block force-push/deletion of `main`; do not enable a required approving review.
-- When both accounts have access: require PRs, successful `backend` and `frontend` status checks, and one approving review. Avoid admin bypass in normal work; verify CI on a test PR before enforcing status checks.
+## GitHub main protection
+- Enable rules blocking **force pushes** and **deletion** of `main` if supported.
+- Do **not** enable mandatory PRs, one-review approval, or required status checks for this main-first workflow.
+- Reconsider stricter branch protection only if team needs change; confirm the impact on direct pushes first.
