@@ -5,13 +5,15 @@ Build a small, testable cognitive-assistance MVP: synthetic functional profiles 
 
 Read `README.md` and `docs/TEAM_WORKFLOW.md` at the start of a new task. Read relevant source files before editing. The current `docs/SYSTEM_ARCHITECTURE_PLACEHOLDER.md` is only a placeholder, not a complete specification; do not infer missing requirements from it. If `docs/IDEA_NOTE.md` or `docs/SYSTEM_ARCHITECTURE.md` are added later, use them for product/architecture decisions. Prefer focused reads over loading unrelated files.
 
-## 2-person collaboration
-- The backend owner normally changes `backend/**`; the frontend/perception owner normally changes `frontend/**`. Ownership is coordination, not an exclusive permission boundary.
-- Before editing, inspect `git status` and the current branch. Never overwrite teammate or user changes. Do not automatically commit, push, force-push, reset, or switch branches unless instructed.
-- Scope each task narrowly. Avoid large refactors, dependency upgrades, or unrelated formatting while implementing an MVP feature.
-- For work affecting both sides of the API, update `backend/app/schemas.py`, `frontend/src/types.ts`, callers, and contract tests together, with a clear explanation to the other developer.
-- When two tasks must edit the same files or contract, agree on the interface and sequence first; do not make incompatible parallel edits.
-- Use feature branches and PRs once team collaboration starts; follow `docs/TEAM_WORKFLOW.md`. Never force-push `main`.
+## 2-person collaboration — main-first workflow
+- The **default working branch is `main`**. For this short hackathon, small verified changes may be committed directly to `main`; feature branches and pull requests are optional, not mandatory.
+- Use a separate feature branch for **high-risk, experimental, long-running, or cross-cutting** work that could destabilize the working demo.
+- The backend owner normally changes `backend/**`; the frontend/perception owner normally changes `frontend/**`. Ownership is for coordination, not exclusive permission.
+- Before editing, inspect `git status` and current branch; when the working tree is clean, sync `main` with `git pull --ff-only origin main`. If there are uncommitted changes or the pull cannot fast-forward, stop and resolve safely rather than discarding work.
+- Scope each task narrowly. Avoid large refactors, unrequested dependency upgrades, or unrelated formatting while implementing an MVP feature.
+- If changing the shared API, coordinate first and update `backend/app/schemas.py`, `frontend/src/types.ts`, callers, and contract tests consistently. Do not edit the same files concurrently without coordination.
+- Run relevant tests before suggesting a commit/push. **Codex must not commit, push, reset, force-push, switch branches, or resolve a teammate's conflicts without the user's explicit instruction.** Never force-push `main`.
+- If a push is rejected because `main` moved, do not force it. Inspect the situation, incorporate the remote changes safely, then rerun relevant checks.
 
 ## Non-negotiable product constraints
 - Use synthetic user profiles, staged scenes, and consenting adult demonstrations. Never commit or transmit real student footage, disability records, private identifiers, or secrets.
