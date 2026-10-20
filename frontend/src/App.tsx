@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import type { PlanRequest, PlanResponse, SceneObject } from './types'
+import { useRef, useState } from 'react'
+import type { PlanRequest, PlanResponse, Profile, SceneObject } from './types'
+import CaregiverSettings from './components/CaregiverSettings'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 const milk: SceneObject = { id: 'milk_1', label: 'milk_carton', bbox: [0.40, 0.25, 0.60, 0.72] }
@@ -13,25 +14,71 @@ function boxStyle(b: [number, number, number, number]) {
 export default function App() {
   const [scenario, setScenario] = useState<'milk' | 'door'>('milk')
   const [instruction, setInstruction] = useState('A야, 우유 가져와야지')
-  const [ability, setAbility] = useState<'yes' | 'no' | 'unknown'>('yes')
+  const [selectedUserId, setSelectedUserId] = useState<'demo_A' | 'demo_B'>('demo_A')
+  const [profiles, setProfiles] = useState<Record<'demo_A' | 'demo_B', Profile>>({
+    demo_A: {
+      user_id: 'demo_A', can_extend_arm: true, can_grasp: true,
+      can_press_button: null, preferred_guidance: ['visual_highlight'],
+    },
+    demo_B: {
+      user_id: 'demo_B', can_extend_arm: false, can_grasp: null,
+      can_press_button: false, preferred_guidance: ['arrow', 'voice'],
+    },
+  })
   const [result, setResult] = useState<PlanResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const requestVersion = useRef(0)
+  const profile = profiles[selectedUserId]
+
+  function clearResult() {
+    requestVersion.current += 1
+    setResult(null)
+    setError(null)
+    setLoading(false)
+  }
+
+  function changeUser(userId: 'demo_A' | 'demo_B') {
+    if (userId === selectedUserId) return
+    setSelectedUserId(userId)
+    clearResult()
+  }
+
+  function changeCapability(
+    capability: 'can_extend_arm' | 'can_grasp' | 'can_press_button', value: boolean | null,
+  ) {
+    if (profile[capability] === value) return
+    setProfiles((previous) => ({
+      ...previous, [selectedUserId]: { ...previous[selectedUserId], [capability]: value },
+    }))
+    clearResult()
+  }
+
+  function toggleGuidance(guidance: Profile['preferred_guidance'][number]) {
+    setProfiles((previous) => {
+      const current = previous[selectedUserId]
+      return {
+        ...previous,
+        [selectedUserId]: {
+          ...current,
+          preferred_guidance: current.preferred_guidance.includes(guidance)
+            ? current.preferred_guidance.filter((item) => item !== guidance)
+            : [...current.preferred_guidance, guidance],
+        },
+      }
+    })
+    clearResult()
+  }
 
   const scene_objects = scenario === 'milk' ? [milk, cup] : [button]
   const data: PlanRequest = {
     transcript: instruction,
-    user_profile: {
-      user_id: 'demo_A',
-      can_grasp: scenario === 'milk' ? (ability === 'unknown' ? null : ability === 'yes') : null,
-      can_press_button: scenario === 'door' ? (ability === 'unknown' ? null : ability === 'yes') : null,
-      can_extend_arm: null,
-      preferred_guidance: [],
-    },
+    user_profile: profile,
     scene_objects,
   }
 
   async function send() {
+    const version = ++requestVersion.current
     setLoading(true)
     setError(null)
     setResult(null)
@@ -40,20 +87,23 @@ export default function App() {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
       })
       const body: PlanResponse | { detail?: string } = await resp.json()
+      if (version !== requestVersion.current) return
       if (!resp.ok) throw new Error(('detail' in body && body.detail) || `HTTP ${resp.status}`)
       setResult(body as PlanResponse)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unknown error')
+      if (version === requestVersion.current) {
+        setError(e instanceof Error ? e.message : 'Unknown error')
+      }
     } finally {
-      setLoading(false)
+      if (version === requestVersion.current) setLoading(false)
     }
   }
 
   function selectScenario(value: 'milk' | 'door') {
+    if (value === scenario) return
     setScenario(value)
     setInstruction(value === 'milk' ? 'A야, 우유 가져와야지' : 'A야, 문 버튼 눌러보자')
-    setResult(null)
-    setError(null)
+    clearResult()
   }
 
   return (
@@ -65,6 +115,9 @@ export default function App() {
       </header>
       <div className="layout">
         <section className="panel controls" aria-label="데모 설정">
+          <CaregiverSettings selectedUserId={selectedUserId} profile={profile}
+            onUserChange={changeUser} onCapabilityChange={changeCapability}
+            onGuidanceToggle={toggleGuidance} />
           <h2>테스트 설정</h2>
           <label>시나리오</label>
           <div className="tabs" role="group" aria-label="시나리오 선택">
@@ -73,12 +126,6 @@ export default function App() {
           </div>
           <label htmlFor="instruction">발화 텍스트 (ASR 미연결)</label>
           <textarea id="instruction" rows={3} value={instruction} onChange={(e) => setInstruction(e.target.value)} />
-          <label htmlFor="ability">사용자의 해당 동작 능력</label>
-          <select id="ability" value={ability} onChange={(e) => setAbility(e.target.value as 'yes' | 'no' | 'unknown')}>
-            <option value="yes">가능</option>
-            <option value="no">불가능</option>
-            <option value="unknown">확인되지 않음</option>
-          </select>
           <button className="primary" onClick={send} disabled={loading || !instruction.trim()}>
             {loading ? '판단 중…' : '단서 생성'}</button>
           <p className="note">실제 Nebius 호출 여부는 백엔드의 <code>PLANNER_MODE</code>로 결정됩니다. API 키는 서버에만 보관합니다.</p>

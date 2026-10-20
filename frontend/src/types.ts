@@ -5,15 +5,17 @@ export type SceneObject = {
   bbox: [number, number, number, number]
 }
 
+export type Profile = {
+  user_id: string
+  can_grasp: boolean | null
+  can_press_button: boolean | null
+  can_extend_arm: boolean | null
+  preferred_guidance: ('visual_highlight' | 'arrow' | 'voice')[]
+}
+
 export type PlanRequest = {
   transcript: string
-  user_profile: {
-    user_id: string
-    can_grasp: boolean | null
-    can_press_button: boolean | null
-    can_extend_arm: boolean | null
-    preferred_guidance: ('visual_highlight' | 'arrow' | 'voice')[]
-  }
+  user_profile: Profile
   scene_objects: SceneObject[]
 }
 
