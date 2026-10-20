@@ -25,6 +25,8 @@ export default function App() {
       user_id: 'demo_A',
       can_grasp: scenario === 'milk' ? (ability === 'unknown' ? null : ability === 'yes') : null,
       can_press_button: scenario === 'door' ? (ability === 'unknown' ? null : ability === 'yes') : null,
+      can_extend_arm: null,
+      preferred_guidance: [],
     },
     scene_objects,
   }

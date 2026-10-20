@@ -11,6 +11,8 @@ export type PlanRequest = {
     user_id: string
     can_grasp: boolean | null
     can_press_button: boolean | null
+    can_extend_arm: boolean | null
+    preferred_guidance: ('visual_highlight' | 'arrow' | 'voice')[]
   }
   scene_objects: SceneObject[]
 }
