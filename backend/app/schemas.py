@@ -10,6 +10,10 @@ class Profile(BaseModel):
     # Demo only. In real deployments, caregiver-verifiable granular ability profiles are required.
     can_grasp: bool | None = None
     can_press_button: bool | None = None
+    can_extend_arm: bool | None = None
+    preferred_guidance: list[Literal["visual_highlight", "arrow", "voice"]] = Field(
+        default_factory=list
+    )
 
 
 class SceneObject(BaseModel):
