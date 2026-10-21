@@ -1,8 +1,8 @@
 # ContextCue Backend Implementation Plan
 
 > **Status:** 실행 순서와 진행 상태를 관리하는 Backend 작업 문서 (2026-10-21)
-> **Current phase:** Phase 1 시작 전
-> **Next task:** Phase 1.1 — `tasking/models.py`의 최소 도메인 모델과 모델 검증 테스트 추가
+> **Current phase:** Phase 1 완료 — Phase 1.1–1.4 및 전체 완료 게이트 충족 (가정된 내부 입력에 한정)
+> **Next task:** Phase 2 — 최소 action vocabulary 검토 후 trusted ActionPolicy/registry와 결정론적 검증 경계 구현
 > **Parallel task:** Nebius Early Smoke Track — 접근 권한·API 연결·최소 JSON 출력 확인 (Phase 1 비차단)
 
 이 문서는 새로운 개발 세션에서도 ContextCue Backend 작업을 안전한 순서로 이어가기 위한 실행 계획이다. 제품 범위는 `docs/PROJECT_PLAN.md`, 모듈과 데이터 경계는 `docs/SYSTEM_ARCHITECTURE.md`, 자동문 행동 기준은 `docs/scenarios/automatic-door.md`를 우선한다. 실제 구현 여부는 항상 코드와 테스트를 다시 확인한다.
@@ -33,14 +33,43 @@
 - [x] live provider 실패를 demo 결과로 숨기지 않고 HTTP 502로 반환
 - [x] Frontend의 별도 가방 챙기기 로컬 상태 머신과 도움 수준 0–4
 - [x] 현재 Backend 회귀 기준: 2026-10-21 문서 정비 후 `uv run pytest` 46개 통과, `uv run ruff check .` 통과
+- [x] Phase 1.1 내부 도메인 모델과 구조·참조 검증: 기존 46개 + 신규 56개 = 102개 테스트 및 Ruff 통과 (2026-10-21)
+
+### Phase 1.1에서 추가된 내부 모델
+
+- [x] 범용 `TaskPlan`, `TaskStep`, `TaskState`, `StepState`, `TaskEvent`, `Evidence` 데이터 모델
+- [x] 의미적 `TargetRef`와 관찰 연결용 `TargetBinding`의 데이터 분리
+
+위 모델은 기존 API에 연결되지 않았다. `TargetBinding`/`Evidence`의 형식 검증은 실제 관찰 진위·출처·freshness나 행동 완료를 입증하지 않는다.
+
+### Phase 1.2에서 추가된 합성 계획 데이터
+
+- [x] 자동문·가방 챙기기 JSON fixture를 같은 `TaskPlan`으로 검증하고 단계 순서·완료 목표 및 관찰/정책 필드 부재 확인
+- [x] Phase 1.2 검증 기준: 기존 102개 + 신규 4개 = 106개 테스트 및 Ruff 통과 (2026-10-21)
+
+두 fixture는 테스트용 의미적 계획이며 production template이나 실행·완료 검증 결과가 아니다. 시나리오별 Python 실행 파일은 추가하지 않았다.
+
+### Phase 1.3에서 추가된 순수 제어 전이
+
+- [x] 과제 독립 초기 상태 생성과 pause/resume/stop/refusal/more-help/help/manual-advance 처리
+- [x] 입력 상태 보존, 단계와 도움 수준 분리, 무응답 시 상태 유지 및 잘못된 전이의 명시적 거부
+- [x] Phase 1.3 검증 기준: 기존 106개 + 신규 74개 = 180개 테스트 및 Ruff 통과 (2026-10-21)
+
+Phase 1.3은 제어 전이만 구현했다. 단계의 `active` 표시는 물리 행동 허가나 실제 완료를 뜻하지 않는다. binding/Evidence 처리와 완료 전이는 아래 Phase 1.4에서 추가했다.
+
+### Phase 1.4에서 추가된 내부 Evidence와 완료 전이
+
+- [x] 내부 `target_bound` 입력으로만 binding 갱신, Evidence의 append-only 기록 및 단계별 누적 이력 전달
+- [x] 주입형 `CompletionEvaluator`와 근거 ID를 가진 `CompletionEvaluation`, 판정 결과 재검증과 satisfied/pending/conflicting 전이
+- [x] 과제명·행동별 분기 없이 두 fixture를 같은 엔진/evaluator로 완료하고 단계 진입 시 도움 초기화
+- [x] Phase 1.4 검증 기준: 기존 180개 + 신규 87개 = 267개 테스트 및 Ruff 통과 (2026-10-21)
+
+Generic Task Engine의 Phase 1 구현은 완료했다. camera/caregiver 입력과 test evaluator는 상위 계층에서 검증됐다고 가정한 합성 데이터다. production Action/Completion Policy, 실제 관찰의 진위·출처·freshness 및 수행 가능성은 검증하지 않았다.
 
 ### 아직 구현되지 않은 목표
 
-- [ ] Backend Generic Task Engine
-- [ ] 범용 `TaskPlan`, `TaskStep`, `TaskState`, `TaskEvent`, `Evidence`
-- [ ] 의미적 target과 관찰된 object binding의 분리
 - [ ] 행동별 Trusted Action/Completion Policy
-- [ ] 행동 완료 Evidence 판정
+- [ ] production 행동 완료 Evidence 판정 (주입형 test evaluator를 통한 전이만 검증됨)
 - [ ] Backend Prompting Policy와 Task orchestration
 - [ ] 구조화된 AI Task Planner와 검증된 Template 선택
 - [ ] Nebius Early Smoke와 실제 모델 접근/최소 JSON 검증
@@ -257,7 +286,7 @@ Phase 4에서는 이 결과를 출발점으로 TaskPlan 크기의 구조화 출�
 
 ## 7. Phase 1 — 최소 도메인 모델과 순수 Generic Task Engine
 
-**상태:** 미구현 — 바로 다음 Phase
+**상태:** 완료 — Phase 1.1–1.4 및 전체 완료 게이트 충족. 가정된 내부 입력과 합성 test evaluator 범위이며 production 검증은 미구현
 
 **목표:** AI, API, DB 없이 범용 계획·상태·이벤트·증거 모델과 결정론적인 순수 상태 전이를 구현한다.
 
@@ -268,6 +297,8 @@ Phase 4에서는 이 결과를 출발점으로 TaskPlan 크기의 구조화 출�
 
 ### Phase 1.1 — 최소 모델
 
+**상태:** 완료 (2026-10-21) — 아래 모델 형식과 참조 검증에 한정
+
 **수정 대상**
 
 - `app/tasking/__init__.py` 신규
@@ -276,26 +307,41 @@ Phase 4에서는 이 결과를 출발점으로 TaskPlan 크기의 구조화 출�
 
 **작업**
 
-- [ ] `TargetRef`: 의미적 target만 표현하고 object ID/bbox 필드 금지
-- [ ] `TargetBinding`: `target_key`, `object_id`, `observation_revision`을 분리한 내부 데이터 형태 정의. Phase 1에서는 값이 상위 계층에서 검증되었다고 가정
-- [ ] `CompletionGoal`: outcome과 target key만 표현하고 Evidence source 정책 금지
-- [ ] `TaskStep`: step ID, action, target key, completion goal, 최대 도움 수준
-- [ ] `TaskPlan`: schema version, plan ID, goal, targets, 순서가 있는 steps
-- [ ] `Evidence`: 선언된 source, claim/outcome, target/object 참조, supports/contradicts/inconclusive. Phase 1에서는 source 문자열의 진위를 검증하지 않음
-- [ ] `TaskEvent`: pause/resume/stop/refusal/more-help/help/manual-advance/cue-issued/target-bound/evidence-received
-- [ ] `StepState`와 `TaskState`: 단계 상태, 현재 단계, 독립 help level, binding, evidence
-- [ ] Pydantic model은 mutable default를 공유하지 않고 알 수 없는 제어 필드를 거부
+- [x] `TargetRef`: 의미적 target만 표현하고 object ID/bbox 필드 금지
+- [x] `TargetBinding`: `target_key`, `object_id`, `observation_revision`을 분리한 내부 데이터 형태 정의. Phase 1에서는 값이 상위 계층에서 검증되었다고 가정
+- [x] `CompletionGoal`: outcome과 target key만 표현하고 Evidence source 정책 금지
+- [x] `TaskStep`: step ID, action, target key, completion goal, 최대 도움 수준
+- [x] `TaskPlan`: schema version, plan ID, goal, targets, 순서가 있는 steps
+- [x] `Evidence`: 선언된 source, claim/outcome, target/object 참조, supports/contradicts/inconclusive. Phase 1에서는 source 문자열의 진위를 검증하지 않음
+- [x] `TaskEvent`: pause/resume/stop/refusal/more-help/help/manual-advance/cue-issued/target-bound/evidence-received
+- [x] `StepState`와 `TaskState`: 단계 상태, 현재 단계, 독립 help level, binding, evidence
+- [x] Pydantic model은 mutable default를 공유하지 않고 알 수 없는 제어 필드를 거부
 
 **테스트 및 완료 기준**
 
-- [ ] object ID가 없는 unresolved `TargetRef`가 유효하다.
-- [ ] `TargetRef`에 bbox/object ID를 직접 넣으면 거부한다.
-- [ ] 중복 target/step ID와 존재하지 않는 target key 참조를 거부한다.
-- [ ] Plan이 allowed Evidence sources나 confidence threshold를 지정할 수 없다.
-- [ ] 모델 round-trip과 기본값 독립성을 검증한다.
-- [ ] `TargetBinding`/`Evidence` 모델 검증이 실제 관찰 진위나 source 신뢰성을 입증하지 않는다는 테스트 설명을 남긴다.
+- [x] object ID가 없는 unresolved `TargetRef`가 유효하다.
+- [x] `TargetRef`에 bbox/object ID를 직접 넣으면 거부한다.
+- [x] 중복 target/step ID와 존재하지 않는 target key 참조를 거부한다.
+- [x] Plan이 allowed Evidence sources나 confidence threshold를 지정할 수 없다.
+- [x] 모델 round-trip과 기본값 독립성을 검증한다.
+- [x] `TargetBinding`/`Evidence` 모델 검증이 실제 관찰 진위나 source 신뢰성을 입증하지 않는다는 테스트 설명을 남긴다.
+
+**구현 선택과 인수인계**
+
+- 변경 파일: `app/tasking/__init__.py`, `app/tasking/models.py`, `tests/test_task_models.py`, 이 계획서.
+- 실제 검사: `backend/`에서 `uv run pytest` **102 passed** (기존 API/planner 46개 + 모델 56개), `uv run ruff check .` **All checks passed!**.
+- 기존 FastAPI TestClient의 Starlette deprecation warning 1개와 uv의 `SSL_CERT_DIR` 인증서 경고가 있었으나 두 명령 모두 exit code 0이었다. 이 작업에서 dependency/환경 설정은 변경하지 않았다.
+- `schema_version="1.0"`, `target_keys` 목록과 `outcome`은 설계 예시를 따른다. qualifier는 현재 `color`/`relative_position` 텍스트만 허용한다.
+- 상태는 `current_step_id`와 단계별 `StepState.help_level`을 별도 보관한다. 초기 도움 수준은 0, 단계별 최대 기본값은 4이며 이 내부 기본값은 Frontend/자동문 도움 척도를 통합한다는 뜻이 아니다.
+- 이벤트 이름은 설계안의 snake_case(`more_help`, `help_requested`, `manual_advance` 등)를 사용한다. 이벤트별 payload 형식만 검증하고 상태 전이를 실행하지 않는다.
+- `observation_revision`은 비어 있지 않은 문자열 참조다. action/outcome 지원 여부, capability, target cardinality, binding freshness/source provenance 및 완료 판정은 구현하지 않았으며 후속 Phase의 책임이다.
+- 증거 구분: 모든 신규 입력은 합성 데이터다. 기존 `DEMO_RULES` 회귀 테스트만 실행했으며 실제 `DEMO_SCENE` 감지나 `LIVE_NEBIUS` 호출은 실행하지 않았다. Early Smoke는 `not_run`이다.
+- 범위 확인: `app/main.py`, `app/schemas.py`, `app/planner.py`, Frontend와 dependencies는 변경하지 않았다. Engine, CompletionEvaluation, 과제 fixture, trusted verification, 신규 API는 추가하지 않았다. commit/push하지 않았다.
+- 바로 다음 작업: **Phase 1.2만** 진행하여 두 JSON fixture를 같은 `TaskPlan`으로 검증한다. Phase 1 전체 완료로 표시하지 않는다.
 
 ### Phase 1.2 — 두 과제 fixture
+
+**상태:** 완료 (2026-10-21) — 합성 계획 데이터와 모델 검증에 한정
 
 **수정 대상**
 
@@ -305,18 +351,32 @@ Phase 4에서는 이 결과를 출발점으로 TaskPlan 크기의 구조화 출�
 
 **작업**
 
-- [ ] 자동문을 `locate_button → press_button → confirm_open → pass_through`로 표현
-- [ ] 가방 챙기기를 `locate_bag → locate_bottle → place_bottle → verify_items`로 표현
-- [ ] 두 fixture 모두 특정 관찰 object ID 없이 semantic target으로 시작
-- [ ] `complete` pseudo-step을 만들지 않고 마지막 행동의 trusted completion으로 Task 종료
+- [x] 자동문을 `locate_button → press_button → confirm_open → pass_through`로 표현
+- [x] 가방 챙기기를 `locate_bag → locate_bottle → place_bottle → verify_items`로 표현
+- [x] 두 fixture 모두 특정 관찰 object ID 없이 semantic target으로 시작
+- [x] `complete` pseudo-step을 만들지 않고 마지막 행동의 trusted completion으로 Task 종료
+
+마지막 항목은 별도 완료 단계를 두지 않는 **계획 데이터 구조**를 충족했다는 뜻이다. 실제 Task 종료 전이와 trusted completion 실행은 각각 Phase 1.4와 Phase 2에서 구현·검증한다.
 
 **테스트 및 완료 기준**
 
-- [ ] 두 JSON이 동일한 `TaskPlan` 모델로 검증된다.
-- [ ] fixture 안에 bbox나 관찰 object ID가 없다.
-- [ ] 시나리오별 Python 실행 파일이 없다.
+- [x] 두 JSON이 동일한 `TaskPlan` 모델로 검증된다.
+- [x] fixture 안에 bbox나 관찰 object ID가 없다.
+- [x] 시나리오별 Python 실행 파일이 없다.
+
+**구현 선택과 인수인계**
+
+- 변경 파일: `tests/fixtures/plans/automatic_door.json`, `tests/fixtures/plans/packing_bag.json`, `tests/test_task_models.py`, 이 계획서. 이전 Phase 1.1의 미커밋 변경은 보존했다.
+- 실제 검사: `backend/`에서 `uv run pytest` **106 passed** (기존 102개 + fixture 검증 4개), `uv run ruff check .` **All checks passed!**. 기존 Starlette deprecation warning 1개와 uv의 `SSL_CERT_DIR` 경고는 동일하며 두 명령 모두 exit code 0이었다. `git diff --check`도 통과했다.
+- 두 fixture는 `locate`, `press`, `observe_state`, `traverse`, `place_inside`를 데이터로 조합한다. 자동문 마지막 목표는 `passed_through`, 가방 마지막 목표는 `items_inside`다. 가방의 `place_inside`는 `target_keys=["bottle", "bag"]`로 넣을 물체와 목적 용기를 순서대로 참조하고 `placed_inside`를 목표로 선언한다.
+- 가방의 새 outcome 이름은 fixture의 의미적 목표이며 trusted Action Policy가 승인한 vocabulary는 아니다. action/outcome 지원·필수 능력·도달 가능성·출처·완료 정책은 후속 Phase에서 검증해야 한다. Frontend의 기존 5단계 가방 데모와 연결하지 않았다.
+- 증거 구분: 합성 계획 데이터만 추가했다. 기존 `DEMO_RULES` 회귀 테스트를 실행했으며 `DEMO_SCENE` 관찰 수집이나 `LIVE_NEBIUS` 호출은 실행하지 않았다. Early Smoke는 `not_run`이다.
+- 범위 확인: 이번 작업은 모델·Engine·trusted verification·API·Frontend·dependencies를 변경하거나 추가하지 않았다. commit/push하지 않았다.
+- 바로 다음 작업: **Phase 1.3만** 진행하여 초기 상태 및 pause/resume/stop/refusal/help/manual-advance의 순수 제어 상태 전이를 구현한다. Phase 1 전체 완료 게이트는 미완료로 유지한다.
 
 ### Phase 1.3 — 제어 상태 전이
+
+**상태:** 완료 (2026-10-21) — 순수 제어 전이에 한정
 
 **수정 대상**
 
@@ -325,23 +385,39 @@ Phase 4에서는 이 결과를 출발점으로 TaskPlan 크기의 구조화 출�
 
 **작업**
 
-- [ ] 초기 `TaskState` 생성
-- [ ] pause/resume, stop, refusal 처리
-- [ ] 명시적인 more-help/help 요청 처리
-- [ ] 단계와 help level을 독립적으로 관리
-- [ ] 무응답으로 상태가 변하지 않도록 보장
-- [ ] `manual_advance`는 이동하지 않고 `needs_confirmation`으로 전환
-- [ ] invalid transition은 상태를 손상시키지 않는 명확한 결과로 반환
+- [x] 초기 `TaskState` 생성
+- [x] pause/resume, stop, refusal 처리
+- [x] 명시적인 more-help/help 요청 처리
+- [x] 단계와 help level을 독립적으로 관리
+- [x] 무응답으로 상태가 변하지 않도록 보장
+- [x] `manual_advance`는 이동하지 않고 `needs_confirmation`으로 전환
+- [x] invalid transition은 상태를 손상시키지 않는 명확한 결과로 반환
 
 **테스트 및 완료 기준**
 
-- [ ] pause 중 진행 이벤트가 차단되고 resume 후 재개된다.
-- [ ] stop/refusal 후 terminal 상태에서 진행하지 않는다.
-- [ ] more-help 이벤트에서만 help level이 증가하고 상한을 넘지 않는다.
-- [ ] 단계 번호 변경 없이 help level만 변할 수 있다.
-- [ ] 무응답을 나타내는 이벤트/호출 부재는 실패나 도움 증가가 아니다.
+- [x] pause 중 진행 이벤트가 차단되고 resume 후 재개된다.
+- [x] stop/refusal 후 terminal 상태에서 진행하지 않는다.
+- [x] more-help 이벤트에서만 help level이 증가하고 상한을 넘지 않는다.
+- [x] 단계 번호 변경 없이 help level만 변할 수 있다.
+- [x] 무응답을 나타내는 이벤트/호출 부재는 실패나 도움 증가가 아니다.
+
+**구현 선택과 인수인계**
+
+- 변경 파일: `app/tasking/engine.py`, `tests/test_task_engine.py`, 이 계획서. 이전 Phase 1.1–1.2의 미커밋 변경은 보존했다.
+- 실제 검사: `backend/`에서 `uv sync --group dev` 성공, `uv run pytest` **180 passed** (기존 106개 + 제어 전이 74개), `uv run ruff check .` **All checks passed!**. 기존 Starlette deprecation warning 1개와 uv의 `SSL_CERT_DIR` 경고는 동일하며 검사 명령은 모두 exit code 0이었다.
+- 인터페이스: `create_task_state(plan, task_id)`는 첫 단계만 `active`, 나머지는 `pending`, 단계별 도움은 0으로 생성한다. `apply_event(plan, state, event=None)`는 입력과 중첩 mutable 값을 공유하지 않는 새 상태 및 `TransitionResult(state, accepted, reason_code)`를 반환한다. 실패 시 상태 내용은 유지한다.
+- `more_help`는 현재 단계의 도움만 최대 `max_help_level`까지 올린다. 상한에서 `help_limit_reached`로 상태를 유지한다. `help_requested`는 도움 수준 증가 없이 `needs_assistance`, `manual_advance`는 단계 이동 없이 `needs_confirmation`으로 전환한다.
+- pause는 `active`에서만, resume은 정상 현재 단계를 가진 `paused`에서만 허용한다. 단계 내부 상태와 도움은 보존한다. 확인/보조 필요 상태를 pause/resume으로 해제하지 않으며 이 상태의 승인·해제 정책은 추가하지 않았다.
+- stop/refusal/help 요청은 terminal이 아닌 상태에서 task 전체에 적용한다. 오래된 step hint, plan 불일치나 도움 상한 오류로 중단·거부·보조 요청을 차단하지 않는다. 그 외 제어는 plan/단계 일치와 도움 범위를 검사한다. `stopped`/`completed`는 모든 실제 이벤트를 거부한다.
+- `event=None`은 무응답/이벤트 부재를 뜻하는 no-op이며 실패나 도움 증가를 만들지 않는다. `cue_issued`, `target_bound`, `evidence_received`는 이번 Phase에서 `unsupported_event`로 거부한다. binding/Evidence 기록·완료 evaluator·다음 단계 이동은 구현하지 않았다.
+- 두 합성 fixture에 같은 엔진 테스트를 적용했다. 테스트의 후속 단계/`completed` 상태와 기존 binding/Evidence는 상태 보존 검사용 가정된 입력일 뿐, 엔진이 실제 행동을 완료하거나 source 신뢰성을 검증했다는 증거가 아니다.
+- 증거 구분: 합성 제어 상태 테스트와 기존 `DEMO_RULES` 회귀 테스트만 실행했다. `DEMO_SCENE` 관찰 수집과 `LIVE_NEBIUS` 호출은 실행하지 않았다. Early Smoke는 `not_run`이다.
+- 범위 확인: 모델·fixture·기존 API·Frontend·dependencies는 이번 작업에서 변경하지 않았다. Phase 1.4, trusted verification, AI, 신규 API, DB를 추가하지 않았고 commit/push하지 않았다.
+- 바로 다음 작업: **Phase 1.4만** 진행하여 가정된 binding/Evidence 기록과 `CompletionEvaluation`/주입형 evaluator 및 완료 전이를 구현한다. Phase 1 전체 완료 게이트는 미완료로 유지한다.
 
 ### Phase 1.4 — 가정된 binding/Evidence와 완료 전이
+
+**상태:** 완료 (2026-10-21) — 모델 형식·내부 가정 입력·순수 상태 전이에 한정
 
 **수정 대상**
 
@@ -350,37 +426,51 @@ Phase 4에서는 이 결과를 출발점으로 TaskPlan 크기의 구조화 출�
 
 **작업**
 
-- [ ] 상위 계층에서 검증되었다고 가정한 내부 `target_bound` 이벤트로만 `TaskState.target_bindings` 갱신
-- [ ] Evidence를 append-only 기록으로 상태에 추가
-- [ ] Engine이 action 의미를 하드코딩하지 않도록 CompletionEvaluator(step, evidence_history) -> CompletionEvaluation callable/protocol을 주입한다. evidence_history는 현재 단계에 관련된 누적 Evidence를 의미한다.
-- [ ] `CompletionEvaluation`은 `status`, considered/supporting/conflicting Evidence ID, `reason_code`만 갖는 작은 결과로 정의
-- [ ] 결과가 참조한 Evidence ID의 존재 여부, supporting/conflicting이 considered의 부분집합인지, status별 최소 근거 조건을 검증
-- [ ] `satisfied`에서만 단계 완료 및 다음 단계 이동
-- [ ] `pending`에서는 현재 단계와 `awaiting_evidence` 유지
-- [ ] `conflicting`에서는 완료하지 않고 `needs_confirmation`으로 전환
-- [ ] 다음 단계 진입 시 help level 초기화
-- [ ] 모든 단계가 trusted completion을 충족한 경우에만 Task 완료
+- [x] 상위 계층에서 검증되었다고 가정한 내부 `target_bound` 이벤트로만 `TaskState.target_bindings` 갱신
+- [x] Evidence를 append-only 기록으로 상태에 추가
+- [x] Engine이 action 의미를 하드코딩하지 않도록 CompletionEvaluator(step, evidence_history) -> CompletionEvaluation callable/protocol을 주입한다. evidence_history는 현재 단계에 관련된 누적 Evidence를 의미한다.
+- [x] `CompletionEvaluation`은 `status`, considered/supporting/conflicting Evidence ID, `reason_code`만 갖는 작은 결과로 정의
+- [x] 결과가 참조한 Evidence ID의 존재 여부, supporting/conflicting이 considered의 부분집합인지, status별 최소 근거 조건을 검증
+- [x] `satisfied`에서만 단계 완료 및 다음 단계 이동
+- [x] `pending`에서는 현재 단계와 `awaiting_evidence` 유지
+- [x] `conflicting`에서는 완료하지 않고 `needs_confirmation`으로 전환
+- [x] 다음 단계 진입 시 help level 초기화
+- [x] 모든 단계가 trusted completion을 충족한 경우에만 Task 완료
 
 **테스트 및 완료 기준**
 
-- [ ] unresolved target을 포함한 계획을 시작할 수 있다.
-- [ ] `cue_issued`, `manual_progress`, `model_assessment`, inconclusive Evidence가 완료시키지 않는다.
-- [ ] test evaluator의 `pending` 결과가 단계와 help level을 유지한다.
-- [ ] test evaluator의 `conflicting` 결과가 근거 Evidence ID를 보존하고 확인 상태로 전환한다.
-- [ ] test evaluator의 `satisfied` 결과만 단계를 완료한다.
-- [ ] 존재하지 않는 Evidence ID, 근거 목록의 잘못된 포함 관계, status와 맞지 않는 근거 조합을 거부한다.
-- [ ] camera/caregiver로 표시된 Evidence는 테스트에서 검증된 것으로 가정한 입력일 뿐이며 실제 source 신뢰성의 증거로 표현하지 않는다.
-- [ ] 자동문과 가방 fixture가 같은 Engine과 evaluator 인터페이스를 사용한다.
-- [ ] Engine에 task 이름별 분기가 없다.
+- [x] unresolved target을 포함한 계획을 시작할 수 있다.
+- [x] `cue_issued`, `manual_progress`, `model_assessment`, inconclusive Evidence가 완료시키지 않는다.
+- [x] test evaluator의 `pending` 결과가 단계와 help level을 유지한다.
+- [x] test evaluator의 `conflicting` 결과가 근거 Evidence ID를 보존하고 확인 상태로 전환한다.
+- [x] test evaluator의 `satisfied` 결과만 단계를 완료한다.
+- [x] 존재하지 않는 Evidence ID, 근거 목록의 잘못된 포함 관계, status와 맞지 않는 근거 조합을 거부한다.
+- [x] camera/caregiver로 표시된 Evidence는 테스트에서 검증된 것으로 가정한 입력일 뿐이며 실제 source 신뢰성의 증거로 표현하지 않는다.
+- [x] 자동문과 가방 fixture가 같은 Engine과 evaluator 인터페이스를 사용한다.
+- [x] Engine에 task 이름별 분기가 없다.
+
+**구현 선택과 인수인계**
+
+- 변경 파일: `app/tasking/engine.py`, `tests/test_task_engine.py`, 이 계획서. 이전 Phase 1.1–1.3의 미커밋 변경은 보존했다.
+- 실제 검사: `backend/`에서 `uv sync --group dev` 성공, `uv run pytest` **267 passed** (기존 180개 + 신규 87개), `uv run ruff check .` **All checks passed!**. 기존 Starlette deprecation warning 1개와 uv의 `SSL_CERT_DIR` 경고만 남았으며 명령은 모두 exit code 0이었다. `git diff --check` 통과 및 기존 API/Frontend/dependency 파일의 diff 부재를 확인했다.
+- `CompletionEvaluation`/`CompletionEvaluator`는 이번 Phase의 수정 대상인 `engine.py`에 정의했다. `apply_event(..., evaluator=...)`는 현재 단계의 누적 Evidence만 깊은 복사로 전달한다. `TransitionResult.evaluation`으로 considered/supporting/conflicting ID와 reason code를 반환하며, 상태는 원본 Evidence 이력을 보존한다.
+- 내부 binding은 선언된 target key만 허용하고 값은 복사한다. 실제 object ID 존재·revision freshness는 검증하지 않는다. Evidence는 현재 단계/target 참조와 ID 중복을 검사한 뒤 append하며, 누락 evaluator에서는 `awaiting_evidence`를 유지한다.
+- cue 발행은 완료 판정기를 호출하거나 성공 Evidence를 생성하지 않고 `awaiting_evidence`로만 전환한다. manual/cue/model/unknown source와 inconclusive claim은 완료 지지 근거로 승격할 수 없다. 이는 공통 허위 완료 방지 조건이며 action별 source 허용·confidence·provenance 정책 구현이 아니다.
+- 평가 결과를 다시 Pydantic 검증하고, 근거 ID는 현재 단계 이력 안에 존재해야 한다. 지지/충돌 목록은 considered의 서로 겹치지 않는 부분집합이어야 하며, 각 근거의 supports/contradicts relation도 확인한다. `satisfied`는 지지 근거와 충돌 부재, `conflicting`은 충돌 근거를 요구하고 `pending`은 충돌 목록을 허용하지 않는다.
+- `pending`은 단계/도움 수준을 유지하고, `conflicting`은 Evidence와 판정 근거를 보존하며 `needs_confirmation`으로 전환한다. 잘못된 판정이나 evaluator 예외도 받은 Evidence를 삭제하지 않고 확인 상태로 전환하며 `accepted=false`와 이유 코드를 반환한다. 다른 입력/제어 거부는 기존 상태를 보존한다.
+- `satisfied`에서만 현재 단계를 완료하고 다음 단계 도움을 0으로 초기화한다. 이전 단계가 모두 완료되고 이후 단계가 대기 중인지 검사해 단계 건너뛰기를 거부하며, 마지막 단계 완료 시 `status=completed`, `current_step_id=None`으로 종료한다. 확인/보조 필요 상태의 해제 정책은 추가하지 않았다.
+- 두 fixture가 동일한 엔진과 합성 test evaluator로 끝까지 전이했다. 이 결과는 source label의 진위, 실제 센서, 신체 수행 가능성이나 production 완료 정책을 입증하지 않는다. `DEMO_RULES` 회귀 테스트는 실행했으며 `DEMO_SCENE` 관찰 수집과 `LIVE_NEBIUS` 호출은 실행하지 않았다. Early Smoke는 `not_run`이다.
+- 범위 확인: 기존 공개 API·모델·fixture·Frontend·dependencies는 이번 작업에서 변경하지 않았다. PlanPatch, AI, 신규 API, DB, production Verification Agent는 추가하지 않았고 commit/push하지 않았다.
+- 바로 다음 작업: **Phase 2**에서 action vocabulary를 검토하고 trusted Action/Completion Policy 및 외부 candidate를 내부 입력으로 승격하는 검증 경계를 구현한다. 이번 작업에서는 Phase 2를 시작하지 않았다.
 
 ### Phase 1 전체 완료 게이트
 
-- [ ] `app/main.py`, `app/schemas.py`, `app/planner.py`, Frontend를 변경하지 않았다.
-- [ ] `PlanPatch`, AI, 신규 API, DB, production Verification Agent를 추가하지 않았다.
-- [ ] Phase 1 테스트가 실제 관찰의 진위·출처 또는 production completion policy를 검증한다고 주장하지 않는다.
-- [ ] `uv run pytest` 통과
-- [ ] `uv run ruff check .` 통과
-- [ ] 실제 테스트 수와 결과를 이 문서의 진행 상태에 기록
+- [x] `app/main.py`, `app/schemas.py`, `app/planner.py`, Frontend를 변경하지 않았다.
+- [x] `PlanPatch`, AI, 신규 API, DB, production Verification Agent를 추가하지 않았다.
+- [x] Phase 1 테스트가 실제 관찰의 진위·출처 또는 production completion policy를 검증한다고 주장하지 않는다.
+- [x] `uv run pytest` 통과
+- [x] `uv run ruff check .` 통과
+- [x] 실제 테스트 수와 결과를 이 문서의 진행 상태에 기록
 
 ## 8. Phase 2 — Trusted Action/Completion Policy와 결정론적 Verification
 
