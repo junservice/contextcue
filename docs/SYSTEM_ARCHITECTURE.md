@@ -161,6 +161,10 @@ flowchart TD
 
 `CompletionGoal` 역시 원하는 의미적 결과일 뿐이다. `press → pressed`에 필요한 능력, binding, 허용 Evidence source와 confidence 기준은 trusted Action Policy가 결정한다. Plan이나 AI 출력에 `allowed_sources`를 넣어 완료 기준을 완화하지 않는다.
 
+Engine에 주입되는 완료 판정은 단순 boolean이 아니라 `satisfied`, `pending`, `conflicting`을 구분한다. 최소 판정 결과에는 평가한 Evidence ID, 완료를 지지한 Evidence ID, 충돌한 Evidence ID와 안정적인 reason code를 둔다. `satisfied`에는 supporting Evidence가 필요하고 충돌 근거가 없어야 하며, `conflicting`에는 실제 conflicting Evidence가 필요하다. 모든 참조 ID는 현재 상태의 Evidence에 존재하고 supporting/conflicting 목록은 considered 목록의 부분집합이어야 한다. `satisfied`만 다음 단계로 진행하고, `pending`은 대기하며, `conflicting`은 자동 완료하지 않고 확인을 요청한다.
+
+첫 Engine 구현에서 사용하는 `TargetBinding`, `Evidence`와 test evaluator는 **상위 계층에서 검증되었다고 가정한 합성 입력**이다. Pydantic 형식 검증이나 `source="camera_observation"` 표시는 실제 관찰의 진위·출처를 증명하지 않는다. 다음 단계의 trusted verification이 candidate binding/Evidence를 observation snapshot, revision, provenance 요구사항과 대조해 Engine용 내부 입력으로 승격하며 신뢰 판정과 Engine 진입 허용을 소유한다. 실제 source adapter는 이후 검증 가능한 provenance를 제공하고 end-to-end 검사를 추가하지만 이 정책 경계를 우회하지 않는다.
+
 ### 공통 상태 및 이벤트 후보
 
 - **과제 상태:** `idle`, `active`, `paused`, `needs_confirmation`, `needs_assistance`, `stopped`, `completed`.
@@ -195,6 +199,8 @@ unknown            = 수행 여부가 확인되지 않음
 - 현재 `backend/app/planner.py`는 `AsyncOpenAI`를 사용해 Nebius Token Factory의 OpenAI 호환 엔드포인트에 요청을 보낼 수 있는 구조다.
 - `backend/.env`에 비밀 키를 보관하고 Frontend/버전 관리에 노출하지 않는다.
 - 기본 모델 ID는 코드의 **초기 후보**다. 현재 계정의 모델 가용성/권한/JSON 안정성/지연을 실호출로 검증해 최종 선택해야 한다.
+- 전체 AI Task Planner 구현 전, Phase 1과 병행 가능한 opt-in smoke 호출로 접근 권한·API 연결·provider의 JSON/structured-output 옵션과 최소 Pydantic schema 검증을 먼저 확인한다. 실패나 계정 미준비는 로컬 Generic Task Engine 구현을 막지 않지만 `LIVE_NEBIUS` 성공으로 표시할 수 없다.
+- Early smoke 성공은 최소 연결 증거일 뿐이며 TaskPlan 크기의 구조화 출력 안정성은 planning 단계에서 다시 검증한다.
 - 모델은 하나의 기존 관찰 물체 ID만 선택할 수 있다. 유효하지 않은 ID 또는 모호한 대상은 Validator에서 차단한다.
 - 호출 실패 시 `DEMO_RULES`로 몰래 대체하지 않고 실패를 명시한다.
 - `DEMO_SCENE`(장면의 출처), `DEMO_RULES`(계획의 출처), `LIVE_NEBIUS`(검증된 모델 호출)를 분리해서 표시한다.
@@ -246,9 +252,9 @@ backend/
 
 ### 단계별 구현
 
-1. `tasking/models.py`와 `tasking/engine.py`에 `TaskPlan`, `TaskStep`, `TaskState`, `TaskEvent`, `Evidence`와 순수 상태 전이만 구현한다. unresolved target을 허용하고 trusted evaluator 인터페이스를 주입하되 `PlanPatch`, AI, DB, 새 API는 추가하지 않는다.
+1. `tasking/models.py`와 `tasking/engine.py`에 `TaskPlan`, `TaskStep`, `TaskState`, `TaskEvent`, `Evidence`와 순수 상태 전이만 구현한다. unresolved target을 허용하고 `satisfied`/`pending`/`conflicting` 완료 결과를 반환하는 evaluator 인터페이스를 주입하되 `PlanPatch`, AI, DB, 새 API는 추가하지 않는다. 이 단계의 binding/Evidence는 검증되었다고 가정한 합성 입력이다.
 2. **자동문/가방 챙기기**를 object ID 없는 서로 다른 합성 TaskPlan fixture로 넣어 엔진 코드 변경 없이 실행되는지 테스트한다. 관찰된 성공과 `manual_advance`를 구분한다.
-3. `tasking/verification.py`에 구조 → binding → 명시적 capability/금지조건 순서의 trusted Action/Completion Policy를 구현한다. 이 단계에서는 AI 검증을 호출하지 않는다.
+3. `tasking/verification.py`에 구조 → binding/provenance → 명시적 capability/금지조건 순서의 trusted Action/Completion Policy를 구현하고, candidate binding/Evidence를 검증된 내부 입력으로 승격한다. 이 단계에서는 AI 검증을 호출하지 않는다.
 4. `tasking/prompting.py`와 `tasking/service.py`로 단일 cue와 orchestration을 연결한 뒤, `tasking/planning.py`에서 구조화된 AI 계획과 선택적 맥락 검증을 추가한다.
 5. 새로운 Task API/UI, 실제 perception, 부분 재계획, 저장소, 장기 기억·Prompt Fading은 앞 단계 계약이 검증된 뒤 순서대로 확장한다. 상세 체크리스트는 `backend/IMPLEMENTATION_PLAN.md`를 따른다.
 

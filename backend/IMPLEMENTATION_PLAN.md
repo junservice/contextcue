@@ -3,6 +3,7 @@
 > **Status:** 실행 순서와 진행 상태를 관리하는 Backend 작업 문서 (2026-10-21)
 > **Current phase:** Phase 1 시작 전
 > **Next task:** Phase 1.1 — `tasking/models.py`의 최소 도메인 모델과 모델 검증 테스트 추가
+> **Parallel task:** Nebius Early Smoke Track — 접근 권한·API 연결·최소 JSON 출력 확인 (Phase 1 비차단)
 
 이 문서는 새로운 개발 세션에서도 ContextCue Backend 작업을 안전한 순서로 이어가기 위한 실행 계획이다. 제품 범위는 `docs/PROJECT_PLAN.md`, 모듈과 데이터 경계는 `docs/SYSTEM_ARCHITECTURE.md`, 자동문 행동 기준은 `docs/scenarios/automatic-door.md`를 우선한다. 실제 구현 여부는 항상 코드와 테스트를 다시 확인한다.
 
@@ -42,6 +43,7 @@
 - [ ] 행동 완료 Evidence 판정
 - [ ] Backend Prompting Policy와 Task orchestration
 - [ ] 구조화된 AI Task Planner와 검증된 Template 선택
+- [ ] Nebius Early Smoke와 실제 모델 접근/최소 JSON 검증
 - [ ] 신규 Task lifecycle API와 세션 보관
 - [ ] Frontend Task Engine 연결
 - [ ] 실제 카메라/검출기, ASR, 음성 출력
@@ -85,6 +87,23 @@
 - `manual_progress`, `cue_issued`, `model_assessment`, 무응답은 물리 행동의 완료 증거가 아니다.
 - AI Verification 결과는 contextual assessment이며 관찰 Evidence가 아니다.
 - 알 수 없거나 action과 맞지 않는 completion goal은 실행하지 않고 확인/거부한다.
+- 완료 evaluator는 단순 `bool`이 아니라 아래의 작은 결과를 반환한다.
+
+```text
+CompletionEvaluation
+  status: satisfied | pending | conflicting
+  considered_evidence_ids: 평가에 사용한 Evidence ID
+  supporting_evidence_ids: 완료를 지지한 Evidence ID
+  conflicting_evidence_ids: 완료와 충돌한 Evidence ID
+  reason_code: insufficient_evidence, criterion_satisfied, contradictory_evidence 등의 안정적인 코드
+```
+
+- `satisfied`만 단계 완료를 허용한다.
+- `pending`은 `awaiting_evidence`를 유지한다.
+- `conflicting`은 완료하지 않고 `needs_confirmation`으로 전환한다.
+- `satisfied`에는 하나 이상의 supporting Evidence가 필요하고 conflicting Evidence가 없어야 한다. `conflicting`에는 하나 이상의 conflicting Evidence가 필요하다. `pending`은 아직 결정적 근거가 없음을 `reason_code`로 설명한다.
+- 결과가 참조한 모든 Evidence ID는 현재 `TaskState.evidence`에 존재해야 하며 supporting/conflicting ID는 considered ID의 부분집합이어야 한다.
+- 초기에는 점수 집계, rule graph, 설명 객체를 추가하지 않는다. Evidence ID와 reason code로 판정 근거를 추적할 수 있으면 충분하다.
 
 ### 3.4 상태와 도움
 
@@ -103,6 +122,13 @@
 5. AI 결과 재검증 후 allow/confirm/assist/stop 중 안전한 결과 적용
 
 AI는 앞 단계의 hard rejection을 뒤집거나 새 object ID, bbox, 행동 성공을 생성할 수 없다. unresolved target 자체는 오류가 아니지만, binding이 필수인 행동에서는 `awaiting_target` 또는 `needs_confirmation`으로 처리한다.
+
+### 3.6 Phase 1과 Phase 2의 신뢰 경계
+
+- Phase 1은 모델 형식과 상태 전이를 검증한다. 이 단계의 `TargetBinding`, `target_bound` 이벤트와 `Evidence`는 **상위 계층에서 검증되었다고 가정한 테스트 입력**이다.
+- Phase 1에서 `source="camera_observation"`을 파싱하거나 test evaluator가 Evidence를 승인해도, 실제 카메라 관찰의 진위·출처·freshness를 입증한 것이 아니다.
+- Phase 2가 외부 candidate binding/Evidence를 observation snapshot, revision, source 요구사항과 대조해 Engine에 전달 가능한 내부 입력으로 승격하는 신뢰 경계를 구현한다.
+- 외부 입력을 신뢰할지 결정하는 정책과 Engine 진입 허용 책임은 Phase 2가 계속 소유한다. Phase 6의 카메라·보호자 입력 adapter는 검증 가능한 provenance를 제공하고 source별 end-to-end 검사를 추가할 뿐, 이 신뢰 결정을 우회하거나 대체하지 않는다.
 
 ## 4. 목표 디렉터리 구조
 
@@ -125,6 +151,8 @@ backend/
 │   │   └── planning.py             # Phase 4
 │   └── templates/                  # Phase 3 이후, 검토된 데이터만
 │       └── automatic_door.v1.json
+├── scripts/
+│   └── nebius_smoke.py             # Early Smoke Track, opt-in live 확인
 └── tests/
     ├── test_api.py
     ├── test_planner.py
@@ -145,17 +173,19 @@ backend/
 
 ```mermaid
 flowchart LR
-  P0[Phase 0: baseline] --> P1[Phase 1: models + pure engine]
+  P0[Phase 0: baseline] --> NS[Nebius early smoke]
+  P0 --> P1[Phase 1: models + pure engine]
   P1 --> P2[Phase 2: trusted verification]
   P2 --> P3[Phase 3: prompting + service + reviewed fixtures]
   P3 --> P4[Phase 4: AI planner + live validation]
+  NS -. live 완료의 선행 확인 .-> P4
   P3 --> P5[Phase 5: Task API + session]
   P4 --> P5
   P5 --> P6[Phase 6: Frontend + evidence integration]
   P6 --> P7[Phase 7: partial replan + persistence + adaptation]
 ```
 
-Phase 4의 실제 모델 검증은 계정/네트워크 준비가 필요하므로 Phase 3 이후 병렬 준비할 수 있지만, AI가 만든 계획을 공개 Task API에서 사용하려면 Phase 2의 검증 경계가 먼저 완료되어야 한다.
+Nebius early smoke는 Phase 1과 병행할 수 있다. 접근 실패나 계정 미준비는 Phase 1–3의 로컬 구현을 막지 않지만 `LIVE_NEBIUS` 성공이나 Phase 4의 live 완료를 주장할 수는 없다. AI가 만든 계획을 공개 Task API에서 사용하려면 Phase 2의 검증 경계도 먼저 완료되어야 한다.
 
 ## 6. Phase 0 — 기존 안전 기준선과 문서 정렬
 
@@ -189,6 +219,42 @@ Phase 4의 실제 모델 검증은 계정/네트워크 준비가 필요하므로
 - 목표 기능을 구현 완료로 잘못 표시하지 않는다.
 - 다음 작업이 Phase 1.1로 명시되어 있다.
 
+## 6A. 병행 Track — Nebius Early Smoke
+
+**상태:** 미실행 — Phase 1과 병행 가능, Phase 1 비차단
+
+**목표:** 전체 AI Task Planner를 만들기 전에 현재 계정의 모델 접근 권한, API 연결, 최소 JSON 출력 가능성을 가장 작은 live 호출로 확인한다.
+
+**선행 조건**
+
+- Phase 0 완료
+- 유효한 `NEBIUS_API_KEY`를 ignored `backend/.env`에만 보관
+- 합성 request만 사용
+
+**예상 수정 대상**
+
+- `scripts/nebius_smoke.py` 신규
+- 필요 시 `.env.example` 설명만 보완
+- Smoke 결과 기록은 이 문서 또는 비밀정보가 없는 별도 문서
+
+**작업**
+
+- [ ] 별도 dependency 없이 기존 `AsyncOpenAI` 설정을 재사용하는 opt-in smoke entrypoint 추가
+- [ ] 합성 scene의 기존 object ID 하나만 선택하는 최소 JSON schema로 호출하고, provider의 JSON/structured-output 옵션과 Pydantic 검증을 통과하는지 확인
+- [ ] 자격 증명 누락, 인증/권한 오류, model unavailable, timeout, 빈 응답, JSON schema 오류, 성공을 구분
+- [ ] 성공 시 실제 사용한 endpoint 구분, model ID, latency, schema 통과 여부만 기록
+- [ ] API key, authorization header, raw 민감 prompt/response를 출력하거나 커밋하지 않음
+- [ ] 실패 시 demo 결과로 fallback하지 않고 실패 유형을 그대로 보고
+
+**테스트 및 완료 기준**
+
+- [ ] 실제 호출이 성공하면 `LIVE_NEBIUS` smoke로 명시하고 최소 JSON이 현재 schema로 검증된다.
+- [ ] 호출을 실행하지 않았거나 실패했다면 `not_run` 또는 `unavailable`로 기록하고 성공으로 체크하지 않는다.
+- [ ] smoke 성공은 Generic TaskPlan 생성, 안전성, 실제 카메라 또는 행동 완료를 입증하지 않는다.
+- [ ] smoke 결과와 무관하게 Phase 1 로컬 테스트 구현을 계속할 수 있다.
+
+Phase 4에서는 이 결과를 출발점으로 TaskPlan 크기의 구조화 출력 안정성과 오류 처리를 다시 검증한다. Early smoke를 Phase 4 전체 완료로 간주하지 않는다.
+
 ## 7. Phase 1 — 최소 도메인 모델과 순수 Generic Task Engine
 
 **상태:** 미구현 — 바로 다음 Phase
@@ -211,11 +277,11 @@ Phase 4의 실제 모델 검증은 계정/네트워크 준비가 필요하므로
 **작업**
 
 - [ ] `TargetRef`: 의미적 target만 표현하고 object ID/bbox 필드 금지
-- [ ] `TargetBinding`: `target_key`, 검증된 `object_id`, `observation_revision` 분리
+- [ ] `TargetBinding`: `target_key`, `object_id`, `observation_revision`을 분리한 내부 데이터 형태 정의. Phase 1에서는 값이 상위 계층에서 검증되었다고 가정
 - [ ] `CompletionGoal`: outcome과 target key만 표현하고 Evidence source 정책 금지
 - [ ] `TaskStep`: step ID, action, target key, completion goal, 최대 도움 수준
 - [ ] `TaskPlan`: schema version, plan ID, goal, targets, 순서가 있는 steps
-- [ ] `Evidence`: source, claim/outcome, target/object 참조, supports/contradicts/inconclusive
+- [ ] `Evidence`: 선언된 source, claim/outcome, target/object 참조, supports/contradicts/inconclusive. Phase 1에서는 source 문자열의 진위를 검증하지 않음
 - [ ] `TaskEvent`: pause/resume/stop/refusal/more-help/help/manual-advance/cue-issued/target-bound/evidence-received
 - [ ] `StepState`와 `TaskState`: 단계 상태, 현재 단계, 독립 help level, binding, evidence
 - [ ] Pydantic model은 mutable default를 공유하지 않고 알 수 없는 제어 필드를 거부
@@ -227,6 +293,7 @@ Phase 4의 실제 모델 검증은 계정/네트워크 준비가 필요하므로
 - [ ] 중복 target/step ID와 존재하지 않는 target key 참조를 거부한다.
 - [ ] Plan이 allowed Evidence sources나 confidence threshold를 지정할 수 없다.
 - [ ] 모델 round-trip과 기본값 독립성을 검증한다.
+- [ ] `TargetBinding`/`Evidence` 모델 검증이 실제 관찰 진위나 source 신뢰성을 입증하지 않는다는 테스트 설명을 남긴다.
 
 ### Phase 1.2 — 두 과제 fixture
 
@@ -274,7 +341,7 @@ Phase 4의 실제 모델 검증은 계정/네트워크 준비가 필요하므로
 - [ ] 단계 번호 변경 없이 help level만 변할 수 있다.
 - [ ] 무응답을 나타내는 이벤트/호출 부재는 실패나 도움 증가가 아니다.
 
-### Phase 1.4 — binding, Evidence와 완료 전이
+### Phase 1.4 — 가정된 binding/Evidence와 완료 전이
 
 **수정 대상**
 
@@ -283,10 +350,14 @@ Phase 4의 실제 모델 검증은 계정/네트워크 준비가 필요하므로
 
 **작업**
 
-- [ ] 검증 완료된 내부 `target_bound` 이벤트로만 `TaskState.target_bindings` 갱신
+- [ ] 상위 계층에서 검증되었다고 가정한 내부 `target_bound` 이벤트로만 `TaskState.target_bindings` 갱신
 - [ ] Evidence를 append-only 기록으로 상태에 추가
-- [ ] Engine이 action 의미를 하드코딩하지 않도록 작은 `CompletionEvaluator` callable/protocol 주입
-- [ ] trusted evaluator가 승인한 Evidence에서만 단계 완료 및 다음 단계 이동
+- [ ] Engine이 action 의미를 하드코딩하지 않도록 CompletionEvaluator(step, evidence_history) -> CompletionEvaluation callable/protocol을 주입한다. evidence_history는 현재 단계에 관련된 누적 Evidence를 의미한다.
+- [ ] `CompletionEvaluation`은 `status`, considered/supporting/conflicting Evidence ID, `reason_code`만 갖는 작은 결과로 정의
+- [ ] 결과가 참조한 Evidence ID의 존재 여부, supporting/conflicting이 considered의 부분집합인지, status별 최소 근거 조건을 검증
+- [ ] `satisfied`에서만 단계 완료 및 다음 단계 이동
+- [ ] `pending`에서는 현재 단계와 `awaiting_evidence` 유지
+- [ ] `conflicting`에서는 완료하지 않고 `needs_confirmation`으로 전환
 - [ ] 다음 단계 진입 시 help level 초기화
 - [ ] 모든 단계가 trusted completion을 충족한 경우에만 Task 완료
 
@@ -294,8 +365,11 @@ Phase 4의 실제 모델 검증은 계정/네트워크 준비가 필요하므로
 
 - [ ] unresolved target을 포함한 계획을 시작할 수 있다.
 - [ ] `cue_issued`, `manual_progress`, `model_assessment`, inconclusive Evidence가 완료시키지 않는다.
-- [ ] contradictory Evidence는 자동 완료하지 않고 확인 상태로 전환한다.
-- [ ] trusted camera/caregiver Evidence는 테스트 evaluator를 통해 단계를 완료할 수 있다.
+- [ ] test evaluator의 `pending` 결과가 단계와 help level을 유지한다.
+- [ ] test evaluator의 `conflicting` 결과가 근거 Evidence ID를 보존하고 확인 상태로 전환한다.
+- [ ] test evaluator의 `satisfied` 결과만 단계를 완료한다.
+- [ ] 존재하지 않는 Evidence ID, 근거 목록의 잘못된 포함 관계, status와 맞지 않는 근거 조합을 거부한다.
+- [ ] camera/caregiver로 표시된 Evidence는 테스트에서 검증된 것으로 가정한 입력일 뿐이며 실제 source 신뢰성의 증거로 표현하지 않는다.
 - [ ] 자동문과 가방 fixture가 같은 Engine과 evaluator 인터페이스를 사용한다.
 - [ ] Engine에 task 이름별 분기가 없다.
 
@@ -303,6 +377,7 @@ Phase 4의 실제 모델 검증은 계정/네트워크 준비가 필요하므로
 
 - [ ] `app/main.py`, `app/schemas.py`, `app/planner.py`, Frontend를 변경하지 않았다.
 - [ ] `PlanPatch`, AI, 신규 API, DB, production Verification Agent를 추가하지 않았다.
+- [ ] Phase 1 테스트가 실제 관찰의 진위·출처 또는 production completion policy를 검증한다고 주장하지 않는다.
 - [ ] `uv run pytest` 통과
 - [ ] `uv run ruff check .` 통과
 - [ ] 실제 테스트 수와 결과를 이 문서의 진행 상태에 기록
@@ -312,6 +387,8 @@ Phase 4의 실제 모델 검증은 계정/네트워크 준비가 필요하므로
 **상태:** 미구현
 
 **목표:** AI 계획이나 Evidence가 명시적 안전 제약과 완료 규칙을 우회하지 못하게 한다.
+
+이 Phase부터 외부의 candidate binding/Evidence를 그대로 Engine에 넣지 않고 검증된 내부 입력으로 승격한다. Phase 1의 모델과 test evaluator는 이 신뢰 경계를 대신하지 않는다.
 
 **선행 조건**
 
@@ -334,6 +411,9 @@ Phase 4의 실제 모델 검증은 계정/네트워크 준비가 필요하므로
 - [ ] action별 필수 capability와 false/unknown 처리 정의
 - [ ] action별 허용 `CompletionGoal`과 Evidence source 정의
 - [ ] Plan 구조/참조 검증 → binding 검증 → capability/hard constraint 검사 순서 구현
+- [ ] candidate `TargetBinding`의 object ID와 observation revision을 현재 observation snapshot에 대조
+- [ ] Evidence의 선언된 source에 필요한 provenance 필드와 trusted policy 허용 여부 검사
+- [ ] 검증을 통과한 binding/Evidence만 Engine용 내부 event로 변환
 - [ ] 기존 `Profile`을 내부 capability fact로 변환하는 adapter 구현
 - [ ] unsupported action/outcome/capability key를 안전하게 거부
 - [ ] AI Verification은 아직 구현하지 않고 `context_review_required` 같은 결과만 표현
@@ -345,8 +425,12 @@ Phase 4의 실제 모델 검증은 계정/네트워크 준비가 필요하므로
 - [ ] false capability는 assistance/stop, unknown은 confirmation으로 구분된다.
 - [ ] AI/Plan이 manual 또는 model Evidence를 완료 source로 만들 수 없다.
 - [ ] stale/unknown object binding이 거부되고 좌표는 생성되지 않는다.
+- [ ] source 이름만 camera/caregiver로 바꾼 Evidence가 자동으로 신뢰되지 않는다.
+- [ ] 누락되거나 일치하지 않는 observation revision/provenance가 거부 또는 confirmation으로 전환된다.
 - [ ] 구조 또는 hard constraint 실패 시 AI 호출 지점에 도달하지 않는다.
 - [ ] 기존 `/api/plan` 46개 회귀 테스트를 유지한다.
+
+Phase 2가 외부 관찰의 진위·출처를 판정하는 정책과 Engine 진입 경계를 소유한다. 다만 실제 카메라 서명이나 보호자 인증처럼 source adapter가 있어야 제공할 수 있는 provenance는 Phase 6에서 연결하고 같은 Phase 2 정책으로 검증한다. 따라서 adapter 없이 끝낸 Phase 2는 실제 센서가 신뢰 가능함을 입증한 것이 아니라, 가짜·누락 provenance를 안전하게 거부할 계약을 강제한 상태다.
 
 ## 9. Phase 3 — Prompting Policy, Service orchestration, 검토된 fixture/template
 
@@ -395,7 +479,8 @@ Phase 4의 실제 모델 검증은 계정/네트워크 준비가 필요하므로
 
 - Phase 2 완료
 - Phase 3의 service 경계 확정
-- 실제 Nebius 계정에서 사용할 모델과 endpoint 확인 가능
+- Early Smoke Track을 적어도 한 번 시도하고 결과를 `passed`, `unavailable`, `not_run` 중 하나로 기록
+- live 통합 완료를 주장하려면 Early Smoke가 실제 Nebius 계정과 대상 모델에서 `passed`
 
 **수정 대상**
 
@@ -414,7 +499,7 @@ Phase 4의 실제 모델 검증은 계정/네트워크 준비가 필요하므로
 - [ ] 잘못된 JSON, unknown action, 허위 candidate object ID 처리
 - [ ] 검증된 Template 선택과 AI 생성 source를 명시적으로 구분
 - [ ] live 호출 실패 시 `DEMO_RULES`로 몰래 fallback하지 않음
-- [ ] 실제 Nebius/NVIDIA 호출로 모델 ID, JSON 안정성, latency 확인
+- [ ] Early Smoke에서 확인한 endpoint/model을 사용해 TaskPlan 크기의 JSON 안정성, latency, 오류 처리 재검증
 
 **테스트 및 완료 기준**
 
@@ -423,6 +508,8 @@ Phase 4의 실제 모델 검증은 계정/네트워크 준비가 필요하므로
 - [ ] AI가 completion policy를 완화할 수 없다.
 - [ ] 실제 live 검증을 했다면 재현 가능한 비밀정보 없는 결과를 기록한다.
 - [ ] live 검증을 하지 않았다면 `LIVE_NEBIUS` 완료로 표시하지 않는다.
+
+Early Smoke가 `unavailable`이어도 mock provider를 이용한 planning 구조와 검증 테스트는 진행할 수 있다. 단, 실제 모델 관련 체크박스와 Phase 4의 live 완료 조건은 열린 상태로 남긴다.
 
 ## 11. Phase 5 — Task lifecycle API와 세션 경계
 
@@ -522,7 +609,9 @@ Phase 4의 실제 모델 검증은 계정/네트워크 준비가 필요하므로
 - [ ] `false`와 `unknown` capability를 `true`로 취급하지 않는다.
 - [ ] locate 같은 인지적 단계와 press/place 같은 물리적 단계를 분리한다.
 - [ ] cue 발행, manual progress, Evidence, 실제 완료를 각각 기록한다.
+- [ ] Evidence의 source label만으로 진위가 증명되었다고 간주하지 않고 Phase 2/6의 검증 경계를 통과시킨다.
 - [ ] `DEMO_SCENE`, `DEMO_RULES`, `LIVE_NEBIUS`를 구분한다.
+- [ ] Nebius smoke 실패가 로컬 Task Engine 개발을 막지 않으며, smoke 성공만으로 AI Planner 전체 완료를 주장하지 않는다.
 - [ ] live provider 오류를 demo 성공처럼 표시하지 않는다.
 - [ ] 합성 프로필·장면과 합의된 성인 시연만 사용한다.
 - [ ] API key, 실제 장애 기록, 학생 영상, private identifier를 커밋하거나 로그에 남기지 않는다.
