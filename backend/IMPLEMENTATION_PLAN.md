@@ -1,9 +1,9 @@
 # ContextCue Backend Implementation Plan
 
 > **Status:** 실행 순서와 진행 상태를 관리하는 Backend 작업 문서 (2026-10-21)
-> **Current phase:** Phase 3 완료 — 순수 Prompting/Service 구현, production template 승격 보류 및 실제 source adapter 미연결
-> **Next task:** Phase 4 — Early Smoke 선행 조건 확인·최소 시도 후 구조화된 AI TaskPlan 제안과 검증 연결 구현
-> **Parallel task:** Nebius Early Smoke Track — 접근 권한·API 연결·최소 JSON 출력 확인 (Phase 1 비차단)
+> **Current phase:** Phase 4 로컬/mock 구현·검증 완료 — 실제 Nebius 호출 및 live 완료 조건은 미검증
+> **Next task:** Phase 5 — Task lifecycle API·세션 경계 설계. AI 계획의 공개 경로는 Phase 4 live 검증을 완료할 때까지 보류
+> **Parallel task:** Nebius Early Smoke Track — `unavailable` (`missing_credentials`, 실제 API 호출 없음). 사용자 요청에 따라 키 없이 mock 검증 완료
 
 이 문서는 새로운 개발 세션에서도 ContextCue Backend 작업을 안전한 순서로 이어가기 위한 실행 계획이다. 제품 범위는 `docs/PROJECT_PLAN.md`, 모듈과 데이터 경계는 `docs/SYSTEM_ARCHITECTURE.md`, 자동문 행동 기준은 `docs/scenarios/automatic-door.md`를 우선한다. 실제 구현 여부는 항상 코드와 테스트를 다시 확인한다.
 
@@ -86,10 +86,20 @@ Generic Task Engine의 Phase 1 구현은 완료했다. Phase 1의 camera/caregiv
 
 Service는 호출자가 넘긴 plan/state/backend 컨텍스트만 사용하는 내부 순수 함수이며 세션 저장·API·AI·TTS 재생·렌더러를 추가하지 않았다. Template은 로드하거나 사용하지 않았고, 실제 source adapter·물리 실행 가능성은 여전히 미검증이다.
 
+### Phase 4에서 추가된 구조화된 계획 제안과 실행 전 검증
+
+- [x] untrusted transcript를 별도 user 데이터로 직렬화하고, 의미적 `TaskPlan`만 파싱·검증하는 비동기 provider 경계
+- [x] 잘못된 JSON·unknown action/outcome·object ID/bbox·Evidence·완료 정책 필드 거부 및 provider 오류의 비민감 reason code 처리
+- [x] 명시적으로 선택한 backend reviewed registry와 AI 생성의 source/mode 구분, template artifact version 기록 및 자동 fallback 금지
+- [x] Service/Engine 호출 전 Phase 2 gate 재검증 및 두 합성 fixture의 동일 생성·시작 경로 확인
+- [x] Phase 4 검증 기준: 기존 396개 + 신규 mock 101개 = 497개 테스트 및 Ruff 통과 (2026-10-21)
+
+기존 `AsyncOpenAI`를 사용하는 opt-in Nebius provider 코드는 추가했으나 실제 호출은 하지 않았다. Early Smoke 사전 점검은 `missing_credentials`로 `unavailable`이며, 사용자 선택에 따라 mock 검증만 완료했다. production template은 승격하지 않았고 테스트용 합성 reviewed registry만 사용했다. 공개 API·세션 저장·실제 관찰 adapter는 추가하지 않았다.
+
 ### 아직 구현되지 않은 목표
 
 - [ ] 실제 source adapter를 연결한 행동 완료 Evidence 검증 (결정론적 정책/승격 경계는 구현됐으나 실제 관찰은 미검증)
-- [ ] 구조화된 AI Task Planner와 검증된 Template 선택
+- [ ] AI Task Planner의 실제 모델 출력 안정성·latency 검증 및 production Template 검토·승격
 - [ ] Nebius Early Smoke와 실제 모델 접근/최소 JSON 검증
 - [ ] 신규 Task lifecycle API와 세션 보관
 - [ ] Frontend Task Engine 연결
@@ -268,7 +278,9 @@ Nebius early smoke는 Phase 1과 병행할 수 있다. 접근 실패나 계정 �
 
 ## 6A. 병행 Track — Nebius Early Smoke
 
-**상태:** 미실행 — Phase 1과 병행 가능, Phase 1 비차단
+**상태:** `unavailable` (2026-10-21) — `missing_credentials`, 실제 API 호출 없음. Track 구현 체크박스는 미완료
+
+Phase 4 선행 점검에서 기존 endpoint/model 설정을 재사용하는 임시 실행으로 키 존재 여부를 확인했다. 결과는 `api_call_attempted=false`, endpoint host `api.tokenfactory.us-central1.nebius.com`, model ID `nvidia/nemotron-3-nano-omni`다. 계정 접근·JSON 응답·latency는 확인하지 못했으며, 사용자는 키 없이 mock 검증을 완료하고 live 미검증으로 기록하도록 요청했다. 별도 smoke entrypoint는 추가하지 않았다.
 
 **목표:** 전체 AI Task Planner를 만들기 전에 현재 계정의 모델 접근 권한, API 연결, 최소 JSON 출력 가능성을 가장 작은 live 호출로 확인한다.
 
@@ -623,7 +635,7 @@ Phase 2가 외부 관찰의 진위·출처를 판정하는 정책과 Engine 진�
 
 ## 10. Phase 4 — 구조화된 AI Task Planner와 실제 모델 검증
 
-**상태:** 미구현
+**상태:** 로컬/mock 구현·검증 완료 (2026-10-21) — 사용자 요청에 따라 live 검증은 보류, 실제 모델 검증 체크박스와 live 완료 조건은 미완료
 
 **목표:** 목표·프로필·관찰을 바탕으로 TaskPlan 제안을 생성하되 trusted verification 밖에서는 실행하지 않는다.
 
@@ -644,24 +656,36 @@ Phase 2가 외부 관찰의 진위·출처를 판정하는 정책과 Engine 진�
 
 **작업 순서**
 
-- [ ] Planner 입력에서 transcript를 untrusted data로 취급
-- [ ] AI 출력 schema를 `TaskPlan` 제안으로 제한
-- [ ] semantic `TargetRef`와 unresolved target을 지원
-- [ ] AI가 bbox와 완료 Evidence를 생성하지 못하도록 출력 계약 제한
-- [ ] 잘못된 JSON, unknown action, 허위 candidate object ID 처리
-- [ ] 검증된 Template 선택과 AI 생성 source를 명시적으로 구분
-- [ ] live 호출 실패 시 `DEMO_RULES`로 몰래 fallback하지 않음
+- [x] Planner 입력에서 transcript를 untrusted data로 취급
+- [x] AI 출력 schema를 `TaskPlan` 제안으로 제한
+- [x] semantic `TargetRef`와 unresolved target을 지원
+- [x] AI가 bbox와 완료 Evidence를 생성하지 못하도록 출력 계약 제한
+- [x] 잘못된 JSON, unknown action, 허위 candidate object ID 처리
+- [x] 검증된 Template 선택과 AI 생성 source를 명시적으로 구분
+- [x] live 호출 실패 시 `DEMO_RULES`로 몰래 fallback하지 않음
 - [ ] Early Smoke에서 확인한 endpoint/model을 사용해 TaskPlan 크기의 JSON 안정성, latency, 오류 처리 재검증
 
 **테스트 및 완료 기준**
 
-- [ ] mock provider로 정상/잘못된 JSON/timeout/unknown ID 경로 검증
-- [ ] AI 제안은 Phase 2 verification을 통과하기 전 Engine에 들어가지 않는다.
-- [ ] AI가 completion policy를 완화할 수 없다.
-- [ ] 실제 live 검증을 했다면 재현 가능한 비밀정보 없는 결과를 기록한다.
-- [ ] live 검증을 하지 않았다면 `LIVE_NEBIUS` 완료로 표시하지 않는다.
+- [x] mock provider로 정상/잘못된 JSON/timeout/unknown ID 경로 검증
+- [x] AI 제안은 Phase 2 verification을 통과하기 전 Engine에 들어가지 않는다.
+- [x] AI가 completion policy를 완화할 수 없다.
+- [ ] 실제 live 검증을 했다면 재현 가능한 비밀정보 없는 결과를 기록한다. — live 미실행으로 해당 없음, 실제 성공 기록은 미완료
+- [x] live 검증을 하지 않았다면 `LIVE_NEBIUS` 완료로 표시하지 않는다.
 
 Early Smoke가 `unavailable`이어도 mock provider를 이용한 planning 구조와 검증 테스트는 진행할 수 있다. 단, 실제 모델 관련 체크박스와 Phase 4의 live 완료 조건은 열린 상태로 남긴다.
+
+**구현 선택과 인수인계**
+
+- 변경 파일: 신규 `app/tasking/planning.py`, 신규 `tests/test_task_planning.py`, 이 계획서. 기존 `app/planner.py`·공개 schema/API·Frontend·dependencies·`.env.example`은 변경하지 않았다.
+- 실제 검사: `backend/`에서 `uv sync --group dev` 성공, 최종 `uv run pytest` **497 passed** (기존 396개 + 신규 planning mock 101개), `uv run ruff check .` **All checks passed!**. 기존 Starlette deprecation warning 1개 및 uv의 `SSL_CERT_DIR` 경고가 남는다.
+- `generate_plan`은 목표·task/plan scope·합성 능력·관찰과 별도 user 데이터의 transcript를 받아 제안만 반환한다. 중복 JSON key, 비표준 상수, 깨진 구조, oversized 응답/계획, unknown action/outcome과 허위 object ID·bbox·Evidence·정책 필드를 거부한다. unresolved 의미적 target은 허용하지만 binding이나 행동 성공을 만들지 않는다.
+- `start_planned_task`는 제안 시점의 allow를 재사용하지 않고 현재 backend `VerificationContext`로 Phase 2 gate를 다시 통과한 경우에만 기존 Service를 호출한다. confirm/assist/stop이면 Engine 상태를 만들지 않는다. 이후 단계 진입·Evidence 완료 검증은 기존 Phase 2/3 경계를 그대로 사용한다.
+- `select_reviewed_template`은 backend가 명시적으로 제공한 reviewed registry만 조회하고 source `REVIEWED_TEMPLATE`, mode `TEMPLATE`, artifact ID/version을 기록한다. AI 제안은 source `AI_GENERATED` 및 provider mode를 기록한다. 자동문·가방 fixture는 여전히 테스트 데이터이며 production template 승격은 보류다.
+- `NebiusPlanProvider`는 기존 endpoint/model 기본값과 SDK의 JSON object 모드, 30초 timeout, 재시도 0회를 사용한다. 실제 provider의 JSON schema 강제 지원은 가정하지 않고 prompt의 schema와 로컬 모델/정책 재검증을 사용한다. timeout·인증·권한·model unavailable·rate limit·빈 응답·잘린 응답 등을 비민감 code로 반환하며 demo/template으로 fallback하지 않는다. 키는 ignored `backend/.env`에서만 설정하고 출력하지 않는다.
+- **live 결과:** Early Smoke `unavailable`, reason `missing_credentials`, `api_call_attempted=false`. endpoint host `api.tokenfactory.us-central1.nebius.com`, model ID `nvidia/nemotron-3-nano-omni`는 설정값이며 접근 성공 결과가 아니다. 실제 TaskPlan 응답·schema 통과율·latency·오류 재현 결과는 없다. 사용자가 키 없이 mock 완료를 선택했으므로 추가 live 호출은 진행하지 않았다.
+- **모드와 한계:** 테스트는 `MOCK_PROVIDER`와 합성 `TEMPLATE`만 사용했다. SDK 주입 client도 mock으로 표시한다. `DEMO_SCENE` 수집·`DEMO_RULES` fallback·`LIVE_NEBIUS` 호출·실제 카메라·행동 수행 검증은 실행하지 않았다. API/세션/인증된 source adapter는 미구현이며 공개 AI 경로는 아직 열지 않는다.
+- 바로 다음 작업: **Phase 5**에서 세션 보관·state version·event 순서 규칙과 Task lifecycle API 계약을 정한다. AI 계획을 공개 경로에 연결하기 전에는 남은 Phase 4 Early Smoke 및 TaskPlan 규모 live 검증을 별도로 완료해야 한다. 이번 작업에서는 Phase 5나 다른 Phase를 구현하지 않았고 commit/push하지 않았다.
 
 ## 11. Phase 5 — Task lifecycle API와 세션 경계
 
