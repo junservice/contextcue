@@ -31,6 +31,51 @@ def test_plan_demo(monkeypatch):
     assert response.json()["bbox"] == [0.4, 0.25, 0.6, 0.72]
 
 
+@pytest.mark.parametrize(
+    ("can_press_button", "can_extend_arm", "expected_status"),
+    [
+        (True, True, "cue"),
+        (True, False, "needs_assistance"),
+        (True, None, "needs_assistance"),
+        (False, True, "needs_assistance"),
+        (None, True, "needs_assistance"),
+    ],
+)
+def test_plan_demo_door_checks_both_capabilities(
+    monkeypatch, can_press_button, can_extend_arm, expected_status
+):
+    monkeypatch.setenv("PLANNER_MODE", "demo")
+    response = client.post(
+        "/api/plan",
+        json={
+            "transcript": "Open the door",
+            "user_profile": {
+                "user_id": "demo_A",
+                "can_press_button": can_press_button,
+                "can_extend_arm": can_extend_arm,
+            },
+            "scene_objects": [
+                {
+                    "id": "button_1",
+                    "label": "door_button",
+                    "bbox": [0.7, 0.3, 0.8, 0.5],
+                }
+            ],
+        },
+    )
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["status"] == expected_status
+    assert body["mode"] == "DEMO_RULES"
+    if expected_status == "cue":
+        assert body["object_id"] == "button_1"
+        assert body["bbox"] == [0.7, 0.3, 0.8, 0.5]
+    else:
+        assert body["object_id"] is None
+        assert body["bbox"] is None
+
+
 def test_profile_defaults():
     profile = Profile(user_id="demo_A")
     assert profile.can_extend_arm is None
