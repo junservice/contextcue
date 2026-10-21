@@ -10,6 +10,7 @@ Start with [Documentation Index](docs/README.md):
 
 - [Project Plan](docs/PROJECT_PLAN.md) — goals, MVP scope, priorities and acceptance criteria
 - [System Architecture](docs/SYSTEM_ARCHITECTURE.md) — current vs target modules, API, state and safety boundaries
+- [Backend Implementation Plan](backend/IMPLEMENTATION_PLAN.md) — dependency-ordered Backend phases, progress and next task
 - [Automatic-door scenario](docs/scenarios/automatic-door.md) — primary MVP walkthrough and evidence criteria
 - [Team Workflow](docs/TEAM_WORKFLOW.md) — two-person, main-first Git coordination
 - [Frontend manual QA checklist](docs/qa/frontend-manual-checklist.md) — planned checks, **not yet executed**

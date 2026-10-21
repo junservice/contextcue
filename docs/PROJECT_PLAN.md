@@ -1,8 +1,9 @@
 # ContextCue — Project Plan
 
-> **Status:** 공동 개발 기준 문서 (2026-10-21, v0.3)
+> **Status:** 공동 개발 기준 문서 (2026-10-21, v0.4)
 > **Origin:** Nebius × NVIDIA Global AI Hackathon
 > **Reading rule:** 이 문서는 제품 목표·MVP 범위를 정의한다. 실제 구현 여부는 각 절의 상태와 저장소 코드를 확인한다. 설계 목표를 이미 완성된 기능으로 소개하지 않는다.
+> Backend의 단계별 구현 순서와 체크 상태는 [`backend/IMPLEMENTATION_PLAN.md`](../backend/IMPLEMENTATION_PLAN.md)에서 관리한다.
 
 ## 1. 한 문장 정의와 문제
 
@@ -78,7 +79,7 @@ ContextCue는 **지적장애와 운동장애가 함께 있는 사용자를 우�
 | M0 — 문서·계약 정렬 | 계획서·아키텍처·시나리오·현재 API의 차이 정리 | 문서 상호 링크, 합의된 변경 단위 |
 | M1 — 안전한 단일 단서 | 자동문 버튼의 운동 능력/객체 검증 보강 | Backend 성공/실패 단위 테스트 |
 | M2 — 실제 모델 검증 | 사용 가능한 Nemotron 모델·엔드포인트·JSON 출력 확인 | 모의 호출이 아닌 실제 API 로그와 오류 처리 |
-| M3 — Generic Task Engine | 공통 TaskPlan/상태 전이·Least-to-Most·도움 요청·결과 근거 구현 (자동문 대표, 가방 챙기기 교차 테스트) | 서로 다른 두 Task 데이터로 동일 엔진 테스트, 허위 완료 방지 |
+| M3 — Generic Task Engine | 의미적 target/binding을 분리한 TaskPlan, 순수 상태 전이, Least-to-Most, trusted 완료 정책 구현 (자동문 대표, 가방 챙기기 교차 테스트) | object ID 없는 두 Task 데이터로 동일 엔진 테스트, cue/manual/AI 판단에 의한 허위 완료 방지 |
 | M4 — UI 연결 및 지각 | Frontend에 Task Engine 연결, 실제 검출 입력 실험 | 사용자 A/B 및 장면 변경의 End-to-End 시연 |
 | M5 — 평가·발표 | 회귀 QA·데모 근거·제한사항 정리 | 테스트 기록, 재현 가능한 시연·문서 |
 
@@ -104,7 +105,7 @@ ContextCue는 **지적장애와 운동장애가 함께 있는 사용자를 우�
 1. 사용자에게 안내를 보여줄 실제 장치와 비접촉 입력/거부 방식.
 2. 이미지/카메라 검출기의 선택, 좌표 신뢰도 기준 및 객체 추적 전략.
 3. 단계별 행동 관찰의 증거 모델과 보호자 확인 UX.
-4. 범용 TaskPlan/상태/증거 스키마, 새 과제 계획의 검증/Template 선택 기준, Task Engine API 계약과 세션 보관 범위.
+4. 범용 TaskPlan의 핵심 방향은 단일 `tasking/` 패키지, 의미적 `TargetRef`/검증된 `TargetBinding`, trusted completion, 순수 상태 전이로 합의했다. 정확한 Task API 계약과 세션 보관 범위는 미결이다.
 5. 장기 기억 및 prompt fading의 신뢰도 기준·적용 시점.
 6. 실제 접근 가능한 Nemotron 모델 ID 및 비용·지연.
 
