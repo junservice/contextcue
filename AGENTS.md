@@ -1,30 +1,36 @@
 # ContextCue — Codex repository instructions
 
-## Goal and sources of truth
-Build a small, testable cognitive-assistance MVP: synthetic functional profiles + scene observations + natural-language instruction -> one physically feasible, grounded cue or a clear request for assistance.
+## Canonical project references
 
-Read `README.md` and `docs/TEAM_WORKFLOW.md` at the start of a new task. Read relevant source files before editing. The current `docs/SYSTEM_ARCHITECTURE_PLACEHOLDER.md` is only a placeholder, not a complete specification; do not infer missing requirements from it. If `docs/IDEA_NOTE.md` or `docs/SYSTEM_ARCHITECTURE.md` are added later, use them for product/architecture decisions. Prefer focused reads over loading unrelated files.
+Read `README.md` and `docs/TEAM_WORKFLOW.md` for every new task. Read relevant sections of `docs/PROJECT_PLAN.md` for product scope and `docs/SYSTEM_ARCHITECTURE.md` for module boundaries, implemented vs target features and API impact. Read `docs/scenarios/automatic-door.md` before automatic-door behavior changes.
+
+Documentation index: `docs/README.md`. Avoid copying the entire plans into agent prompts. The plans describe **goals as well as implemented features**; never equate the two. The real Python/TypeScript schemas and tests reflect current contracts; coordinate any change to align them with plans. Prefer focused reads and source inspection before edits.
 
 ## 2-person collaboration — main-first workflow
-- The **default working branch is `main`**. For this short hackathon, small verified changes may be committed directly to `main`; feature branches and pull requests are optional, not mandatory.
-- Use a separate feature branch for **high-risk, experimental, long-running, or cross-cutting** work that could destabilize the working demo.
-- The backend owner normally changes `backend/**`; the frontend/perception owner normally changes `frontend/**`. Ownership is for coordination, not exclusive permission.
-- Before editing, inspect `git status` and current branch; when the working tree is clean, sync `main` with `git pull --ff-only origin main`. If there are uncommitted changes or the pull cannot fast-forward, stop and resolve safely rather than discarding work.
-- Scope each task narrowly. Avoid large refactors, unrequested dependency upgrades, or unrelated formatting while implementing an MVP feature.
-- If changing the shared API, coordinate first and update `backend/app/schemas.py`, `frontend/src/types.ts`, callers, and contract tests consistently. Do not edit the same files concurrently without coordination.
-- Run relevant tests before suggesting a commit/push. **Codex must not commit, push, reset, force-push, switch branches, or resolve a teammate's conflicts without the user's explicit instruction.** Never force-push `main`.
-- If a push is rejected because `main` moved, do not force it. Inspect the situation, incorporate the remote changes safely, then rerun relevant checks.
+
+- The default working branch is `main`. Small, verified changes may be committed directly; PRs are optional, not mandatory.
+- Use a separate feature branch for high-risk, experimental, long-running or cross-cutting work that could destabilize the demo.
+- Backend owner normally changes `backend/**`; frontend owner normally changes `frontend/**`. Ownership is for coordination, not exclusive permission.
+- Before editing, inspect `git status` and branch. With a clean tree, sync `main` using `git pull --ff-only origin main`. If unsafe, stop and resolve without discarding others' work.
+- Keep changes narrowly scoped; avoid unrelated refactors, dependencies or formatting.
+- Shared API changes require coordination and consistent updates to `backend/app/schemas.py`, `frontend/src/types.ts`, callers and tests.
+- Run relevant checks before suggesting commit/push. **Codex must not commit, push, reset, force-push, switch branches or resolve teammate conflicts without explicit user instruction.** Never force-push `main`.
+- For rejected pushes, inspect upstream, incorporate changes safely, rerun checks, never force.
 
 ## Non-negotiable product constraints
-- Use synthetic user profiles, staged scenes, and consenting adult demonstrations. Never commit or transmit real student footage, disability records, private identifiers, or secrets.
-- API keys are server-side only in ignored `backend/.env`; never put them in `frontend/`, logs, commits, or PR descriptions.
-- A language model may select **only an observed object ID**, never invent a bounding box or assert an unobserved action completed. Visual coordinates must originate in validated observations.
-- Unknown/blocked motor abilities, ambiguous objects or addressees, refusal, or unsafe actions must lead to confirmation, assistance, or stopping—not a fabricated confident cue.
-- Explicitly distinguish `DEMO_SCENE` fixtures, `DEMO_RULES` logic, and verified `LIVE_NEBIUS` calls. Never claim live inference from a mock.
-- Give one minimal, accessible cue at a time; do not assume touch or fine motor control is possible.
+
+- Use synthetic profiles, staged scenes and consenting adult demos. Never commit or transmit real student footage, identifiable disability records, private identifiers or secrets.
+- API keys belong only in ignored server-side `backend/.env`; never expose them in frontend, logs, commits or PR descriptions.
+- The AI may select only observed object IDs. Bounding boxes come from validated observations, not a language model.
+- Never infer action success from a displayed cue, button press in demo UI or lack of user response.
+- Block/unknown abilities, ambiguous objects or addressees, refusal or unsafe actions require confirmation, assistance or stop—not fabricated cues.
+- Do not assume `can_extend_arm=true` proves actual reachability or accurate button pressing. Treat each relevant ability and real-world reachability independently.
+- Distinguish `DEMO_SCENE` fixtures, `DEMO_RULES` logic and **verified** `LIVE_NEBIUS` calls. Never claim mocks are live.
+- Offer one accessible minimal cue at a time, respecting refusal and motor limitations.
 
 ## Verification and handoff
-- Backend changes: from `backend/`, run `uv run pytest` and `uv run ruff check .`.
-- Frontend changes: from `frontend/`, run `npm run typecheck` and `npm run build`.
-- For a behavior change, add or update synthetic test cases. For an API change, test both sides.
-- In the final report say: changed files, observed tests/results, known limitations, and whether inference was demo or live. Never claim tests were run if they were not.
+
+- Backend: from `backend/`, run `uv run pytest` and `uv run ruff check .`.
+- Frontend: from `frontend/`, run `npm run typecheck` and `npm run build`.
+- Add synthetic tests for behavior changes; update both sides for API changes.
+- Report changed files, observed check results, known limitations and whether inference was demo or live. Never claim unexecuted tests passed.
