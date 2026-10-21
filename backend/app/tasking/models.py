@@ -1,12 +1,12 @@
 """Internal task data contracts, independent of providers, APIs and execution policy.
 
 Binding/Evidence parsing checks structure only, not observation authenticity,
-freshness or source trust. Trusted verification belongs to a later phase.
+freshness or source trust. The verification module owns the trusted input boundary.
 """
 
 from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints, model_validator
 
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 HelpLevel = Annotated[int, Field(strict=True, ge=0)]
@@ -35,6 +35,49 @@ class TargetBinding(TaskModel):
     target_key: Text
     object_id: Text
     observation_revision: Text
+
+
+class ObservedObject(TaskModel):
+    """Semantic observation supplied by a backend adapter, not an AI proposal.
+
+    Pixel coordinates remain in perception data; verification never creates them.
+    """
+
+    object_id: Text
+    concept: Text
+    qualifiers: dict[Literal["color", "relative_position"], Text] = Field(default_factory=dict)
+
+
+class ObservationSnapshot(TaskModel):
+    revision: Text
+    objects: list[ObservedObject] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def check_ids(self) -> Self:
+        require_unique([obj.object_id for obj in self.objects], "observation object IDs")
+        return self
+
+
+CapabilityKey = Literal[
+    "can_grasp", "can_press_button", "can_extend_arm", "can_place_inside", "can_traverse",
+]
+
+
+class CapabilityFacts(TaskModel):
+    can_grasp: StrictBool | None = None
+    can_press_button: StrictBool | None = None
+    can_extend_arm: StrictBool | None = None
+    can_place_inside: StrictBool | None = None
+    can_traverse: StrictBool | None = None
+
+
+class FeasibilityAssessment(TaskModel):
+    """Backend-provided physical context fact, scoped to a step/revision/objects."""
+
+    step_id: Text
+    observation_revision: Text
+    object_ids: tuple[Text, ...]
+    feasible: StrictBool | None = None
 
 
 class CompletionGoal(TaskModel):
@@ -96,6 +139,8 @@ class Evidence(TaskModel):
     target_keys: list[Text] = Field(default_factory=list)
     object_ids: list[Text] = Field(default_factory=list)
     observation_revision: Text | None = None
+    provenance_id: Text | None = None
+    confidence: float | None = Field(default=None, strict=True, ge=0, le=1, allow_inf_nan=False)
     relation: Literal["supports", "contradicts", "inconclusive"]
 
     @model_validator(mode="after")

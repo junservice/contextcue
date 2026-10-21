@@ -1,8 +1,8 @@
 # ContextCue Backend Implementation Plan
 
 > **Status:** 실행 순서와 진행 상태를 관리하는 Backend 작업 문서 (2026-10-21)
-> **Current phase:** Phase 1 완료 — Phase 1.1–1.4 및 전체 완료 게이트 충족 (가정된 내부 입력에 한정)
-> **Next task:** Phase 2 — 최소 action vocabulary 검토 후 trusted ActionPolicy/registry와 결정론적 검증 경계 구현
+> **Current phase:** Phase 3 완료 — 순수 Prompting/Service 구현, production template 승격 보류 및 실제 source adapter 미연결
+> **Next task:** Phase 4 — Early Smoke 선행 조건 확인·최소 시도 후 구조화된 AI TaskPlan 제안과 검증 연결 구현
 > **Parallel task:** Nebius Early Smoke Track — 접근 권한·API 연결·최소 JSON 출력 확인 (Phase 1 비차단)
 
 이 문서는 새로운 개발 세션에서도 ContextCue Backend 작업을 안전한 순서로 이어가기 위한 실행 계획이다. 제품 범위는 `docs/PROJECT_PLAN.md`, 모듈과 데이터 경계는 `docs/SYSTEM_ARCHITECTURE.md`, 자동문 행동 기준은 `docs/scenarios/automatic-door.md`를 우선한다. 실제 구현 여부는 항상 코드와 테스트를 다시 확인한다.
@@ -64,13 +64,31 @@ Phase 1.3은 제어 전이만 구현했다. 단계의 `active` 표시는 물리 
 - [x] 과제명·행동별 분기 없이 두 fixture를 같은 엔진/evaluator로 완료하고 단계 진입 시 도움 초기화
 - [x] Phase 1.4 검증 기준: 기존 180개 + 신규 87개 = 267개 테스트 및 Ruff 통과 (2026-10-21)
 
-Generic Task Engine의 Phase 1 구현은 완료했다. camera/caregiver 입력과 test evaluator는 상위 계층에서 검증됐다고 가정한 합성 데이터다. production Action/Completion Policy, 실제 관찰의 진위·출처·freshness 및 수행 가능성은 검증하지 않았다.
+Generic Task Engine의 Phase 1 구현은 완료했다. Phase 1의 camera/caregiver 입력과 test evaluator는 상위 계층에서 검증됐다고 가정한 합성 데이터다. 정책과 검증 경계는 아래 Phase 2에서 추가했으며 실제 관찰의 진위·출처나 신체 수행 가능성을 실환경에서 입증한 것은 아니다.
+
+### Phase 2에서 추가된 trusted 정책과 입력 검증 경계
+
+- [x] 다섯 generic action의 불변 정책 registry, capability/binding/context/completion 조건 정의
+- [x] Plan 구조 → 관찰 binding → capability/hard constraint → 필요한 맥락 확인 순서의 결정론적 검증
+- [x] 현재 observation revision, source principal, task/plan scope와 정확한 claim provenance를 검사한 내부 이벤트 승격
+- [x] 기존 Engine의 evaluator 주입 인터페이스에 연결하는 trusted completion evaluator와 Profile adapter
+- [x] Phase 2 검증 기준: 기존 267개 + 신규 73개 = 340개 테스트 및 Ruff 통과 (2026-10-21)
+
+`VerificationContext`는 backend가 제공하는 신뢰 컨텍스트이며 client/AI 입력에서 역직렬화하면 안 된다. 인증된 camera/caregiver adapter 및 실제 물리 맥락 근거 수집은 아직 없고, 테스트는 합성 principal·receipt·관찰·능력·실행 가능성 fact를 사용했다. Phase 2 완료는 이 입력 계약과 안전한 거부 경계의 검증이다.
+
+### Phase 3에서 추가된 순수 Prompting Policy와 Task Service
+
+- [x] 도움 수준·guidance 선호를 반영해 cue 하나만 선택하고, visual cue에는 검증된 object ID/revision만 전달
+- [x] 검증 → Engine → Prompting 순서를 조정하고 단계 진입·active context 변경·resume 후 재검증
+- [x] cue 발행, Evidence 수용, 단계/Task 완료를 별도 audit event로 반환하며 무응답에서는 cue 재발행·도움 증가를 하지 않음
+- [x] 두 합성 fixture의 동일 Service 경로 검증 및 자동문 production template 승격 보류 결정
+- [x] Phase 3 검증 기준: 기존 340개 + 신규 56개 = 396개 테스트 및 Ruff 통과 (2026-10-21)
+
+Service는 호출자가 넘긴 plan/state/backend 컨텍스트만 사용하는 내부 순수 함수이며 세션 저장·API·AI·TTS 재생·렌더러를 추가하지 않았다. Template은 로드하거나 사용하지 않았고, 실제 source adapter·물리 실행 가능성은 여전히 미검증이다.
 
 ### 아직 구현되지 않은 목표
 
-- [ ] 행동별 Trusted Action/Completion Policy
-- [ ] production 행동 완료 Evidence 판정 (주입형 test evaluator를 통한 전이만 검증됨)
-- [ ] Backend Prompting Policy와 Task orchestration
+- [ ] 실제 source adapter를 연결한 행동 완료 Evidence 검증 (결정론적 정책/승격 경계는 구현됐으나 실제 관찰은 미검증)
 - [ ] 구조화된 AI Task Planner와 검증된 Template 선택
 - [ ] Nebius Early Smoke와 실제 모델 접근/최소 JSON 검증
 - [ ] 신규 Task lifecycle API와 세션 보관
@@ -474,7 +492,7 @@ Phase 4에서는 이 결과를 출발점으로 TaskPlan 크기의 구조화 출�
 
 ## 8. Phase 2 — Trusted Action/Completion Policy와 결정론적 Verification
 
-**상태:** 미구현
+**상태:** 완료 (2026-10-21) — 결정론적 정책·입력 계약·엔진 진입 경계에 한정, 실제 source adapter는 미연결
 
 **목표:** AI 계획이나 Evidence가 명시적 안전 제약과 완료 규칙을 우회하지 못하게 한다.
 
@@ -495,36 +513,63 @@ Phase 4에서는 이 결과를 출발점으로 TaskPlan 크기의 구조화 출�
 
 **작업 순서**
 
-- [ ] `ActionPolicy`와 작은 registry 정의
-- [ ] 초기 generic action: `locate`, `press`, `observe_state`, `traverse`, `place_inside`
-- [ ] action별 target cardinality와 binding 요구 정의
-- [ ] action별 필수 capability와 false/unknown 처리 정의
-- [ ] action별 허용 `CompletionGoal`과 Evidence source 정의
-- [ ] Plan 구조/참조 검증 → binding 검증 → capability/hard constraint 검사 순서 구현
-- [ ] candidate `TargetBinding`의 object ID와 observation revision을 현재 observation snapshot에 대조
-- [ ] Evidence의 선언된 source에 필요한 provenance 필드와 trusted policy 허용 여부 검사
-- [ ] 검증을 통과한 binding/Evidence만 Engine용 내부 event로 변환
-- [ ] 기존 `Profile`을 내부 capability fact로 변환하는 adapter 구현
-- [ ] unsupported action/outcome/capability key를 안전하게 거부
-- [ ] AI Verification은 아직 구현하지 않고 `context_review_required` 같은 결과만 표현
+- [x] `ActionPolicy`와 작은 registry 정의
+- [x] 초기 generic action: `locate`, `press`, `observe_state`, `traverse`, `place_inside`
+- [x] action별 target cardinality와 binding 요구 정의
+- [x] action별 필수 capability와 false/unknown 처리 정의
+- [x] action별 허용 `CompletionGoal`과 Evidence source 정의
+- [x] Plan 구조/참조 검증 → binding 검증 → capability/hard constraint 검사 순서 구현
+- [x] candidate `TargetBinding`의 object ID와 observation revision을 현재 observation snapshot에 대조
+- [x] Evidence의 선언된 source에 필요한 provenance 필드와 trusted policy 허용 여부 검사
+- [x] 검증을 통과한 binding/Evidence만 Engine용 내부 event로 변환
+- [x] 기존 `Profile`을 내부 capability fact로 변환하는 adapter 구현
+- [x] unsupported action/outcome/capability key를 안전하게 거부
+- [x] AI Verification은 아직 구현하지 않고 `context_review_required` 같은 결과만 표현
 
 **테스트 및 완료 기준**
 
-- [ ] `locate`는 unresolved target을 허용하고 누르기 능력을 요구하지 않는다.
-- [ ] `press`는 binding 및 `can_press_button`/`can_extend_arm`을 요구한다.
-- [ ] false capability는 assistance/stop, unknown은 confirmation으로 구분된다.
-- [ ] AI/Plan이 manual 또는 model Evidence를 완료 source로 만들 수 없다.
-- [ ] stale/unknown object binding이 거부되고 좌표는 생성되지 않는다.
-- [ ] source 이름만 camera/caregiver로 바꾼 Evidence가 자동으로 신뢰되지 않는다.
-- [ ] 누락되거나 일치하지 않는 observation revision/provenance가 거부 또는 confirmation으로 전환된다.
-- [ ] 구조 또는 hard constraint 실패 시 AI 호출 지점에 도달하지 않는다.
-- [ ] 기존 `/api/plan` 46개 회귀 테스트를 유지한다.
+- [x] `locate`는 unresolved target을 허용하고 누르기 능력을 요구하지 않는다.
+- [x] `press`는 binding 및 `can_press_button`/`can_extend_arm`을 요구한다.
+- [x] false capability는 assistance/stop, unknown은 confirmation으로 구분된다.
+- [x] AI/Plan이 manual 또는 model Evidence를 완료 source로 만들 수 없다.
+- [x] stale/unknown object binding이 거부되고 좌표는 생성되지 않는다.
+- [x] source 이름만 camera/caregiver로 바꾼 Evidence가 자동으로 신뢰되지 않는다.
+- [x] 누락되거나 일치하지 않는 observation revision/provenance가 거부 또는 confirmation으로 전환된다.
+- [x] 구조 또는 hard constraint 실패 시 AI 호출 지점에 도달하지 않는다.
+- [x] 기존 `/api/plan` 46개 회귀 테스트를 유지한다.
+
+**확정한 초기 정책 vocabulary**
+
+| action | 허용 outcome / target 수 | 행동 진입 시 binding | 필수 capability | 별도 물리 맥락 근거 |
+|---|---|---|---|---|
+| `locate` | `target_located` / 1 | 없어도 탐색 안내 가능 | 없음 | 불필요 |
+| `press` | `pressed` / 1 | 필요 | `can_press_button`, `can_extend_arm` | 필요 |
+| `observe_state` | `state_open` / 1, `items_inside` / 2 | 필요 | 없음 | 불필요 |
+| `traverse` | `passed_through` / 1 | 필요 | `can_traverse` | 필요 |
+| `place_inside` | `placed_inside` / 2 (물체, 용기 순서) | 필요 | `can_grasp`, `can_extend_arm`, `can_place_inside` | 필요 |
+
+**구현 선택과 인수인계**
+
+- 변경 파일: `app/tasking/models.py`, 신규 `app/tasking/verification.py`, 신규 `tests/test_task_verification.py`, 이 계획서. 기존 API·Frontend·fixture·dependencies와 Phase 1 Engine 코드는 변경하지 않았다.
+- 실제 검사: `backend/`에서 `uv sync --group dev` 성공, `uv run pytest` **340 passed** (기존 267개 + Phase 2 73개), `uv run ruff check .` **All checks passed!**. 기존 API/planner 46개도 모두 통과했다. 기존 Starlette deprecation warning 1개와 uv의 `SSL_CERT_DIR` 경고만 남았고 명령은 모두 exit code 0이었다. `git diff --check` 및 범위 밖 파일 diff 부재도 확인했다.
+- `ActionPolicy`는 frozen 모델, `ACTION_POLICIES`는 변경할 수 없는 mapping이다. Plan은 정책/source/confidence를 지정할 수 없다. 정책이 모르는 action/outcome/capability key와 잘못된 target 수·역할 순서는 안전하게 거부한다.
+- `profile_to_capabilities`는 기존 공개 `Profile`의 세 bool/null fact만 복사한다. `can_place_inside`와 `can_traverse`는 내부 fact로 추가했으며 기본값은 미확인이다. grasp나 arm extension으로 넣기·통과 능력을 추정하지 않는다. capability false는 `assist`, unknown은 `confirm`, 잘못된 구조/정책은 `stop`으로 구분한다.
+- `ObservationSnapshot`은 revision과 의미적 관찰 목록만 갖고 bbox를 만들지 않는다. binding의 ID/revision 및 concept/제한 qualifier를 대조하고, 일치 대상이 하나인지 확인한다. binding이 있으면 locate에서도 검증하며, 실제 완료 Evidence에는 locate도 관찰된 대상과 binding이 필요하다.
+- `FeasibilityAssessment`는 backend가 제공하는 step/revision/ordered object ID 범위의 별도 물리 맥락 fact다. 필요한 능력이 true여도 이 fact가 없거나 unknown이면 `context_review_required`, false면 보조 필요로 반환한다. 실제 근거 수집·AI 맥락 추론은 구현하지 않았다.
+- `Evidence`에 내부 optional `provenance_id`와 `confidence`를 추가했다. 형식 파싱만으로 신뢰를 얻지 않는다. 허용 source는 초기 다섯 action 모두 camera/caregiver이며 camera confidence 최소 0.9는 코드 정책이다. 이는 합성 테스트를 위한 초기 보수적 기준이며 실제 센서의 정확도나 통계적 보장을 검증한 값이 아니다.
+- provenance는 후보가 제출하는 `verified=true`가 아니라 backend 컨텍스트의 `EvidenceReceipt`를 조회한다. source별 허용 principal, task/plan scope, receipt ID와 정확한 claim 전체(step/outcome/target/object/revision/relation/confidence/source)를 대조한다. source 재라벨링, claim 변조, 다른 task/plan의 기록 재사용과 누락 provenance를 거부한다. 실제 principal 인증/서명/receipt 생성 adapter는 Phase 6에서 연결해야 한다.
+- `verify_step`는 구조 → 기존 binding → capability/hard constraint → 필요한 맥락 순서로 검사한다. `verify_event`는 active/current step 상태도 확인하고 통과한 binding/Evidence/cue 후보만 복사된 `TaskEvent`로 반환한다. 실패 시 `event=None`과 `allow/confirm/assist/stop` 판정을 제공하며, 상태/안내 orchestration은 Phase 3으로 남겼다. 내부 pause/stop/help 제어의 Phase 1 계약은 유지했다.
+- `trusted_completion_evaluator(plan, bindings, context)`가 기존 Engine의 `evaluator=` 연결부를 사용한다. 컨텍스트를 깊은 복사로 고정하고 누적 Evidence를 정책/provenance와 재대조하며, 하나라도 검증되지 않은 기록이면 완료하지 않는다. 검증된 충돌은 `conflicting`, 지지 근거는 `satisfied`, 나머지는 `pending`으로 반환한다. 관찰/binding/컨텍스트가 바뀌면 gate와 evaluator를 다시 구성해야 한다.
+- 외부 후보를 raw Engine 이벤트나 Phase 1 test evaluator로 직접 처리하면 이 경계를 우회한다. 이후 Service는 backend 전용 컨텍스트에서 이 gate와 trusted evaluator를 사용해야 한다. 이번 Phase는 공개 route나 client 컨텍스트 입력 경로를 추가하지 않았다.
+- 두 합성 fixture가 같은 gate/정책/evaluator/Engine으로 끝까지 전이했다. 인증·센서·신체 실행 가능성은 합성 서버 fact로 가정했으며 실제 관찰 진위나 효능을 입증한 결과가 아니다. `DEMO_RULES` 회귀 테스트만 실행했고 `DEMO_SCENE` 관찰 수집과 `LIVE_NEBIUS` 호출은 실행하지 않았다. Early Smoke는 `not_run`이다.
+- Phase 3의 Prompting/Service, AI Verification/Planner, 신규 API, DB, 실제 source adapter는 구현하지 않았으며 commit/push하지 않았다.
+- 바로 다음 작업: **Phase 3**에서 이 검증 경계를 사용한 순수 Prompting Policy와 Service orchestration을 구현하고 두 fixture의 단계 진입·컨텍스트 변경 재검증을 테스트한다.
 
 Phase 2가 외부 관찰의 진위·출처를 판정하는 정책과 Engine 진입 경계를 소유한다. 다만 실제 카메라 서명이나 보호자 인증처럼 source adapter가 있어야 제공할 수 있는 provenance는 Phase 6에서 연결하고 같은 Phase 2 정책으로 검증한다. 따라서 adapter 없이 끝낸 Phase 2는 실제 센서가 신뢰 가능함을 입증한 것이 아니라, 가짜·누락 provenance를 안전하게 거부할 계약을 강제한 상태다.
 
 ## 9. Phase 3 — Prompting Policy, Service orchestration, 검토된 fixture/template
 
-**상태:** 미구현
+**상태:** 완료 (2026-10-21) — 내부 순수 Prompting/Service 및 합성 검증에 한정. production template 승격은 보류
 
 **목표:** 검증된 단계에 대해 한 번에 하나의 단서를 고르고, 외부 부작용 없이 전체 실행 순서를 조정한다.
 
@@ -542,22 +587,39 @@ Phase 2가 외부 관찰의 진위·출처를 판정하는 정책과 Engine 진�
 
 **작업 순서**
 
-- [ ] help level과 사용자 guidance 선호를 입력으로 받는 순수 Prompting Policy 구현
-- [ ] unresolved target에는 좌표 기반 cue를 생성하지 않음
-- [ ] bound target cue도 object ID만 전달하고 bbox는 observation lookup에서 가져오게 함
-- [ ] cue 발행과 행동 완료를 별도 이벤트로 기록
-- [ ] Task Service가 verification → engine → prompting 순서를 조정
-- [ ] step 진입과 context 변경에서 재검증하도록 orchestration 정의
-- [ ] 자동문 fixture를 검토한 뒤 production template 승격 여부 결정
-- [ ] Template 사용 시 source/version을 명시
+- [x] help level과 사용자 guidance 선호를 입력으로 받는 순수 Prompting Policy 구현
+- [x] unresolved target에는 좌표 기반 cue를 생성하지 않음
+- [x] bound target cue도 object ID만 전달하고 bbox는 observation lookup에서 가져오게 함
+- [x] cue 발행과 행동 완료를 별도 이벤트로 기록
+- [x] Task Service가 verification → engine → prompting 순서를 조정
+- [x] step 진입과 context 변경에서 재검증하도록 orchestration 정의
+- [x] 자동문 fixture를 검토한 뒤 production template 승격 여부 결정
+- [x] Template 사용 시 source/version을 명시 — 이번 Phase는 미사용으로 조건부 해당 없음. 향후 선택 경로를 추가할 때 필수 조건으로 유지
 
 **테스트 및 완료 기준**
 
-- [ ] 한 번에 cue 하나만 반환한다.
-- [ ] 무응답만으로 help level을 올리지 않는다.
-- [ ] cue 발행이 step completion을 만들지 않는다.
-- [ ] invalid/unbound target에 highlight bbox를 반환하지 않는다.
-- [ ] Task Service 테스트는 AI, 네트워크, DB 없이 실행된다.
+- [x] 한 번에 cue 하나만 반환한다.
+- [x] 무응답만으로 help level을 올리지 않는다.
+- [x] cue 발행이 step completion을 만들지 않는다.
+- [x] invalid/unbound target에 highlight bbox를 반환하지 않는다.
+- [x] Task Service 테스트는 AI, 네트워크, DB 없이 실행된다.
+
+**구현 선택과 인수인계**
+
+- 변경 파일: 신규 `app/tasking/prompting.py`, 신규 `app/tasking/service.py`, 신규 `tests/test_task_prompting.py`, 신규 `tests/test_task_service.py`, 이 계획서. 기존 Phase 2의 미커밋 변경은 보존했으며 이번 작업에서 수정하지 않았다.
+- 실제 검사: `backend/`에서 `uv sync --group dev` 성공, `uv run pytest` **396 passed** (기존 340개 + Prompting 24개 + Service 32개), `uv run ruff check .` **All checks passed!**. 기존 API/planner 46개도 유지됐다. 기존 Starlette deprecation warning 1개와 uv의 `SSL_CERT_DIR` 경고만 남았으며 명령은 모두 exit code 0이었다. `git diff --check` 통과 및 기존 API/Frontend/dependency 파일의 diff 부재를 확인했다.
+- `select_cue(plan, state, context, preferred_guidance)`는 독립 호출에서도 Phase 2 gate를 확인하고, 검증된 active 단계에서 `Cue | None` 하나만 반환한다. 입력과 도움 수준을 수정하지 않는다. unknown/stale/ambiguous target, blocked/unknown 물리 조건, pause/hold/terminal 상태에서는 행동 cue를 만들지 않는다.
+- Backend 내부 도움 척도는 0=추가 cue 없음, 1=text/voice, 2=선호 시 highlight, 3=선호 시 arrow(없으면 허용된 낮은 도움), 4 이상=보조 요청 제안이다. 최대치는 단계의 `max_help_level`을 따른다. 기존 Frontend/자동문 문서의 척도를 변경하거나 통합한 것은 아니다. 도움 증가·보조자 인계는 여전히 명시적 제어 이벤트로 구분한다.
+- unresolved locate에는 text/voice로 찾기만 안내한다. visual `Cue`에는 object ID와 observation revision을 함께 요구하고 bbox 필드 자체를 금지한다. 실제 renderer는 이 두 키로 일치하는 observation의 기존 bbox를 조회해야 하며, 텍스트로 좌표를 생성하면 안 된다. 이번 Phase는 renderer/perception adapter를 구현하지 않았다. `voice`는 텍스트와 출력 방식의 선택 결과이며 실제 음성 재생이 아니다.
+- `start_task`는 제공된 구조적으로 유효한 계획으로 초기 상태를 만들고, `handle_event`는 매번 새 backend `VerificationContext`를 받아 외부 binding/Evidence/cue 후보를 검증한 후 Engine에 전달한다. Evidence에는 Phase 2 trusted evaluator를 새로 주입한다. AI/test evaluator를 선택하거나 실패를 demo 성공으로 바꾸는 경로는 없다.
+- `ServiceResult`는 새 상태, 최대 하나의 cue, 이번 호출의 audit events 및 필요 시 completion evaluation을 반환한다. `cue_issued`는 발행 결정만 기록하며 Evidence/완료를 생성하지 않는다. `step_completed`/`task_completed`는 trusted `satisfied` 전이에서만 별도로 기록하고 지지 Evidence ID를 보존한다. 저장·전체 event history 누적은 호출자 책임이다.
+- 새 단계 진입 직후 다시 검증한다. 이전 단계가 완료돼도 다음 단계의 binding/능력/물리 맥락이 불충분하면 완료 이력은 보존하고 새 단계는 확인/보조 필요 상태로 전환하며 cue를 반환하지 않는다. 이 경우 `accepted=false`는 최종 흐름 차단을 뜻하며, 반환 상태와 audit events에는 이미 수용한 이전 단계의 Evidence/완료가 남는다.
+- active 상태의 `candidate=None` 호출은 현재 context만 재검증하고 cue를 재발행하거나 도움을 증가시키지 않는다. revision/능력/물리 fact가 바뀌면 즉시 확인·보조·중단 상태로 보낸다. pause에서는 진행하지 않고 resume 후 현재 context를 다시 확인한다. stop/refusal/help/manual-advance는 안내 없이 기존 안전 제어 의미를 유지한다.
+- 확인/보조 필요 상태는 polling이나 resume으로 자동 해제하지 않는다. 명시적 승인·재검토 후 복귀 및 stale binding 정리의 별도 흐름은 추가하지 않았다. 입력 상태를 덮어쓰지 않으며 호출자는 반환된 상태를 이어 사용해야 한다. 실제 source 인증·관찰 freshness와 개인정보 보호는 backend adapter 경계를 통해 계속 보장해야 한다.
+- 두 fixture가 동일 Service로 전체 전이했다. socket/DB 연결과 legacy live planner 호출을 차단한 테스트에서도 cue 및 Evidence 처리 경로가 실행됐다. 이 결과는 합성 principal·receipt·능력·물리 맥락 fact에 대한 검증이며 실제 카메라·신체 수행·접근성 효과를 입증한 것이 아니다. `DEMO_RULES` 회귀 테스트만 실행했고 `DEMO_SCENE` 관찰 수집, `LIVE_NEBIUS` 호출, 실제 TTS는 실행하지 않았다. Early Smoke는 `not_run`이다.
+- 자동문 fixture는 기존 모델/정책 및 Service 흐름으로 검토했으나 production template으로 **승격 보류**했다. 실제 provenance adapter·물리 실행 근거 및 배포용 template 검토/versioning이 준비되지 않았기 때문이다. `app/templates/automatic_door.v1.json`을 만들지 않았고, Template을 로드/선택/사용하지 않았다. 현재 입력은 caller-provided `TaskPlan`이며 `schema_version`을 template artifact version으로 오인하지 않는다. 향후 Template을 사용하려면 source와 artifact version을 명시해야 한다.
+- 기존 공개 API·모델·Engine·verification·fixture·Frontend·dependencies는 이번 Phase에서 변경하지 않았다. AI Planner/Verification, 신규 API, DB/세션 저장과 실제 source adapter는 추가하지 않았고 commit/push하지 않았다.
+- 바로 다음 작업: **Phase 4**에서 Early Smoke 선행 조건(최소 한 번 시도 및 `passed`/`unavailable`/`not_run` 기록)을 확인하고, 구조화된 AI TaskPlan 제안과 Phase 2/3 검증 연결을 구현한다. 이번 작업에서는 Early Smoke나 Phase 4를 실행하지 않았다.
 
 ## 10. Phase 4 — 구조화된 AI Task Planner와 실제 모델 검증
 
