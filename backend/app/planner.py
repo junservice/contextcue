@@ -115,12 +115,17 @@ def validate_pick(request: PlanRequest, pick: ModelPick, live: bool) -> PlanResp
             status="needs_confirmation", cue_text="같은 물체가 여러 개 있거나 확인할 수 없어요.",
             mode=mode, reason="ambiguous_or_missing_target",
         )
-    can_act = (
-        request.user_profile.can_grasp
+    required_capabilities = (
+        (request.user_profile.can_grasp,)
         if pick.intent == "retrieve_object"
-        else request.user_profile.can_press_button
+        else (
+            request.user_profile.can_press_button,
+            request.user_profile.can_extend_arm,
+        )
     )
-    if can_act is not True:
+    # These are prerequisites for offering a location cue, not evidence that the
+    # observed object is physically within reach or that the action was completed.
+    if any(capability is not True for capability in required_capabilities):
         return PlanResponse(
             status="needs_assistance", cue_text="이 동작은 보조자의 확인이나 도움이 필요해요.",
             mode=mode, reason="capability_blocked_or_unknown",
