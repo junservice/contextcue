@@ -1,0 +1,89 @@
+{
+  "evaluation_id": "e4-baseline-v1-2026-10-22",
+  "dataset_version": "e4-v1",
+  "started_at_utc": "2026-10-22T07:15:55.193645+00:00",
+  "git_sha": "79c5d4fcd9ba3d38f7611b13eb46826a5dd69a18",
+  "working_tree": "dirty; pre-existing Phase 4 changes preserved",
+  "sha256": {
+    "evaluations\\e4\\cases.json": "f94c8e71fc8a44776b4a45cf2a9f1a9d89f47d4f25cfc370ca06572c41f82551",
+    "evaluations\\e4\\README.md": "b81a085f2bbdb247348d96cd25f645e6384b2b280ac66747c1efc573ae944db5",
+    "scripts\\evaluate_e4.py": "7c3b9b64eea1688b669e61f5022fea776fecd95a0a2711ff1de683745d31d199",
+    "app\\tasking\\planning.py": "e11371f37cb3d594e49be61140695b34a9474261cd0a700f5b368d42afb7ddb4",
+    "app\\tasking\\verification.py": "ec0a2e2788c570030ddf44c7c5483ba7631b42e60b01fd291adda742dcedcebe",
+    "app\\tasking\\service.py": "8fa81f251a26588d4110efbf5bafe3179b2aa415d2cebc0b585f9f40a75b81a8",
+    "app\\tasking\\prompting.py": "36cf265beff60cd012e09c3ab3dd2c5a31be87dfa2be9e85e24a8af90c56c369"
+  },
+  "schema_sha256": "907524c51d207887915f675ef94e1fcb334e5978c7ef0dc2566f9ca1d5a1ed0a",
+  "samples_per_case": 2,
+  "planned_live_calls": 36,
+  "retries": 0,
+  "temperature": "provider_default_unset",
+  "seed": "unset",
+  "timeout_seconds": 60,
+  "max_tokens": 4096,
+  "cost": "not_available: account tariff not verified",
+  "results": {
+    "mode": "MOCK_PROVIDER",
+    "mutations": [
+      {
+        "case_id": "malformed_json",
+        "mode": "MOCK_PROVIDER",
+        "reason_code": "invalid_plan_json",
+        "expected_reason": "invalid_plan_json",
+        "blocked": true
+      },
+      {
+        "case_id": "unsupported_action",
+        "mode": "MOCK_PROVIDER",
+        "reason_code": "unsupported_action",
+        "expected_reason": "unsupported_action",
+        "blocked": true
+      },
+      {
+        "case_id": "unsupported_outcome",
+        "mode": "MOCK_PROVIDER",
+        "reason_code": "unsupported_outcome",
+        "expected_reason": "unsupported_outcome",
+        "blocked": true
+      },
+      {
+        "case_id": "fake_object_id",
+        "mode": "MOCK_PROVIDER",
+        "reason_code": "invalid_plan_json",
+        "expected_reason": "invalid_plan_json",
+        "blocked": true
+      },
+      {
+        "case_id": "fake_bbox",
+        "mode": "MOCK_PROVIDER",
+        "reason_code": "invalid_plan_json",
+        "expected_reason": "invalid_plan_json",
+        "blocked": true
+      },
+      {
+        "case_id": "completion_sources",
+        "mode": "MOCK_PROVIDER",
+        "reason_code": "invalid_plan_json",
+        "expected_reason": "invalid_plan_json",
+        "blocked": true
+      },
+      {
+        "case_id": "completion_threshold",
+        "mode": "MOCK_PROVIDER",
+        "reason_code": "invalid_plan_json",
+        "expected_reason": "invalid_plan_json",
+        "blocked": true
+      },
+      {
+        "case_id": "invented_evidence",
+        "mode": "MOCK_PROVIDER",
+        "reason_code": "invalid_plan_json",
+        "expected_reason": "invalid_plan_json",
+        "blocked": true
+      }
+    ],
+    "valid_control_service_accepted": true,
+    "api_calls": 0
+  },
+  "finished_at_utc": "2026-10-22T07:15:55.367143+00:00"
+}
