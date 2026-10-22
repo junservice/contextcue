@@ -40,4 +40,9 @@ header p, footer { color: #a6b4c9; line-height: 1.6; }
 .feedback.muted { color: #adbed0; }
 .meta { display:flex; gap: 12px; flex-wrap: wrap; font-size: 11px; color: #a1bad3; margin-top: 12px; }
 footer { font-size: 12px; margin-top: 20px; }
+.help-explanation { margin: 18px 0; padding: 16px; border: 1px solid #54728b; border-radius: 10px; background: #101d2f; overflow-wrap: anywhere; }
+.help-explanation h3 { margin: 0 0 10px; font-size: 19px; }
+.help-explanation h4 { margin: 16px 0 8px; }
+.help-explanation p { margin: 8px 0; line-height: 1.6; }
+.packing-future-note { color: #c1cee0; line-height: 1.6; }
 @media (max-width: 760px) { .layout {grid-template-columns: 1fr;} .page {padding: 24px 14px;} }
