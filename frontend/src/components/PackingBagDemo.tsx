@@ -6,17 +6,21 @@ import PackingScene from './PackingScene'
 import ProfileSummary from './ProfileSummary'
 import TaskControls from './TaskControls'
 import TaskProgress from './TaskProgress'
+import DemoObservationControls from './DemoObservationControls'
+import type { DemoObservation, DemoProgressState } from '../observation/types'
 
 const statusLabels = {
   active: '진행 중', paused: '잠시 멈췄어요.', help_requested: '보호자 확인이 필요해요.',
   stopped: '작업을 종료했어요.', completed: '가방 챙기기 데모를 마쳤어요.',
 }
 
-export default function PackingBagDemo({ profile, state, notice, onAction }: {
+export default function PackingBagDemo({ profile, state, notice, onAction, observationState, onObservation }: {
   profile: Profile
   state: PackingState
   notice: string
   onAction: (event: PackingEvent) => void
+  observationState: DemoProgressState
+  onObservation: (event: DemoObservation) => void
 }) {
   const step = steps[state.currentStep]
   const guidance = profile.preferred_guidance
@@ -43,7 +47,7 @@ export default function PackingBagDemo({ profile, state, notice, onAction }: {
       <p>합성 장면을 사용하는 데모입니다. 실제 행동을 자동으로 확인하지 않습니다.</p>
       <p>{profile.user_id === 'demo_A' ? '사용자 A' : '사용자 B'}의 작업</p>
       {notice && <p role="status">{notice}</p>}
-      <TaskProgress state={state} />
+      <TaskProgress state={state} history={observationState.history} />
       <PackingScene targetId={step.target} visualCue={presentation.visualCue} />
       <h3>현재 안내</h3>
       <p role="status">{prompt}</p>
@@ -63,10 +67,11 @@ export default function PackingBagDemo({ profile, state, notice, onAction }: {
       {state.currentStep === 'put_bottle_in_bag' && state.taskStatus === 'active' &&
         <p>데모 프로필만으로 모든 신체 조건이 확인되는 것은 아닙니다. 필요하면 도움을 요청해 주세요.</p>}
       {state.taskStatus === 'help_requested' && <p>실제 알림은 전송되지 않습니다. 보호자 확인은 현재 단계의 수동 진행 입력입니다.</p>}
-      {state.taskStatus === 'completed' && <p>단계를 직접 넘겨 종료한 데모입니다. 실제 준비 완료 여부는 확인되지 않았습니다.</p>}
+      {state.taskStatus === 'completed' && <p>수동 입력과 합성 관찰에 따른 데모를 마쳤습니다. 실제 준비 완료 여부는 확인되지 않았습니다.</p>}
       <p>‘다음’은 현재 데모의 임시 수동 진행 버튼입니다. 실제 행동의 성공을 판정하지 않습니다.</p>
       <p className="packing-future-note">향후 구현 예정: 카메라 관찰 이벤트로 행동 완료가 확인되면 자동으로 다음 단계로 이동하는 구조를 목표로 합니다. 현재는 카메라가 연결되어 있지 않습니다.</p>
       <TaskControls state={state} onAction={onAction} />
+      <DemoObservationControls state={observationState} onObservation={onObservation} />
       <ProfileSummary profile={profile} />
     </section>
   )

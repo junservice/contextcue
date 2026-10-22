@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react'
+import { useEffect, useReducer, useRef, useState } from 'react'
 import type { PlanRequest, PlanResponse, Profile, SceneObject } from './types'
 import CaregiverSettings from './components/CaregiverSettings'
 import PackingBagDemo from './components/PackingBagDemo'
-import { initialPackingState, transitionPacking } from './packing/transitions'
+import { demoProgressReducer, initialDemoProgress } from './observation/demoProgress'
+import type { DemoObservation } from './observation/types'
 import type { PackingEvent } from './packing/types'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
@@ -16,8 +17,8 @@ function boxStyle(b: [number, number, number, number]) {
 
 export default function App() {
   const [view, setView] = useState<'api' | 'packing'>('packing')
-  const [packingState, setPackingState] = useState(initialPackingState)
-  const [packingNotice, setPackingNotice] = useState('')
+  const [demoProgress, dispatchProgress] = useReducer(demoProgressReducer, undefined, initialDemoProgress)
+  const packingState = demoProgress.packing
   const [scenario, setScenario] = useState<'milk' | 'door'>('milk')
   const [instruction, setInstruction] = useState('A야, 우유 가져와야지')
   const [selectedUserId, setSelectedUserId] = useState<'demo_A' | 'demo_B'>('demo_A')
@@ -36,15 +37,32 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const requestVersion = useRef(0)
   const profile = profiles[selectedUserId]
+  const manualSequence = useRef(0)
+
+  useEffect(() => {
+    if (!demoProgress.pendingAuto) return
+    // Give queued user controls priority before committing synthetic progress.
+    const timer = window.setTimeout(() => dispatchProgress({ kind: 'commit_auto', profile,
+      token: { sessionId: demoProgress.sessionId, stepEntryId: demoProgress.stepEntryId,
+        evidenceEpoch: demoProgress.evidenceEpoch } }), 0)
+    return () => window.clearTimeout(timer)
+  }, [demoProgress.pendingAuto, demoProgress.sessionId, demoProgress.stepEntryId,
+    demoProgress.evidenceEpoch, profile])
 
   function resetPacking(notice: string) {
-    setPackingState(initialPackingState())
-    setPackingNotice(notice)
+    dispatchProgress({ kind: 'reset', notice })
   }
 
   function handlePackingAction(event: PackingEvent) {
-    setPackingState((previous) => transitionPacking(previous, event, profile))
-    setPackingNotice('')
+    dispatchProgress({ kind: 'manual', event, profile,
+      inputId: `${demoProgress.sessionId}:manual:${++manualSequence.current}`, token: {
+      sessionId: demoProgress.sessionId, stepEntryId: demoProgress.stepEntryId,
+      evidenceEpoch: demoProgress.evidenceEpoch,
+    } })
+  }
+
+  function handleObservation(observation: DemoObservation) {
+    dispatchProgress({ kind: 'observation', observation, profile })
   }
 
   function clearResult() {
@@ -156,7 +174,8 @@ export default function App() {
           </>}
         </section>
         {view === 'packing' ? (
-          <PackingBagDemo profile={profile} state={packingState} notice={packingNotice} onAction={handlePackingAction} />
+          <PackingBagDemo profile={profile} state={packingState} notice={demoProgress.message} onAction={handlePackingAction}
+            observationState={demoProgress} onObservation={handleObservation} />
         ) : <section className="panel stage" aria-label="단서 표시">
           <div className="stage-heading"><h2>사용자 화면</h2><span className="pill">DEMO_SCENE · 합성 장면</span></div>
           <div className={`scene ${scenario}`} role="img" aria-label="임의로 그린 모의 장면. 실제 사물 검출 영상이 아닙니다.">
