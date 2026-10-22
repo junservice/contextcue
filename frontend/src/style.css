@@ -45,6 +45,8 @@ footer { font-size: 12px; margin-top: 20px; }
 .help-explanation h4 { margin: 16px 0 8px; }
 .help-explanation p { margin: 8px 0; line-height: 1.6; }
 .packing-future-note { color: #c1cee0; line-height: 1.6; }
+.demo-observation { margin: 20px 0; padding: 16px; border: 2px dashed #78c9eb; border-radius: 10px; overflow-wrap: anywhere; }
+.demo-observation p { line-height: 1.6; }
 .task-progress-list { list-style: none; padding: 0; display: grid; gap: 8px; }
 .task-progress-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px; border: 1px solid #54728b; border-radius: 8px; overflow-wrap: anywhere; }
 .task-progress-symbol { flex: 0 0 24px; text-align: center; font-size: 20px; font-weight: 800; }

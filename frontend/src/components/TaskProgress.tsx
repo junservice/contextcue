@@ -1,5 +1,11 @@
 import { stepOrder } from '../packing/steps'
 import type { PackingState, PackingStep } from '../packing/types'
+import type { ProgressCause } from '../observation/types'
+
+const causeLabels: Record<ProgressCause, string> = {
+  manual: '수동 진행 완료', caregiver: '보호자 확인으로 진행',
+  demo_observation: 'DEMO_OBSERVATION · 합성 관찰 조건 충족',
+}
 
 const titles: Record<PackingStep, string> = {
   find_bag: '가방 찾기',
@@ -17,7 +23,9 @@ const currentStates = {
   completed: { symbol: '✓', label: '데모 완료' },
 }
 
-export default function TaskProgress({ state }: { state: PackingState }) {
+export default function TaskProgress({ state, history }: {
+  state: PackingState; history: Partial<Record<PackingStep, ProgressCause>>
+}) {
   const currentIndex = stepOrder.indexOf(state.currentStep)
   return (
     <section className="task-progress" aria-label="가방 챙기기 전체 진행 단계">
@@ -29,7 +37,7 @@ export default function TaskProgress({ state }: { state: PackingState }) {
           const isCurrent = index === currentIndex
           const isPrevious = index < currentIndex
           const marker = isCurrent ? currentStates[state.taskStatus]
-            : isPrevious ? { symbol: '✓', label: '수동 진행 완료' }
+            : isPrevious ? { symbol: '✓', label: history[step] ? causeLabels[history[step]!] : '진행 기록 없음' }
               : { symbol: '○', label: '아직 시작하지 않음' }
           return (
             <li key={step} aria-current={isCurrent ? 'step' : undefined}
@@ -40,7 +48,7 @@ export default function TaskProgress({ state }: { state: PackingState }) {
           )
         })}
       </ol>
-      <p className="task-progress-note">단계 표시는 수동 입력에 따른 데모 진행 기록입니다. 실제 행동 완료를 확인한 결과가 아닙니다.</p>
+      <p className="task-progress-note">단계 표시는 수동 입력 또는 합성 관찰 조건에 따른 데모 기록입니다. 실제 행동 완료 판정이 아닙니다.</p>
     </section>
   )
 }
