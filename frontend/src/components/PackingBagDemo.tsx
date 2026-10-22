@@ -1,10 +1,11 @@
 import type { Profile } from '../types'
-import { stepOrder, steps } from '../packing/steps'
+import { steps } from '../packing/steps'
 import type { PackingEvent, PackingState } from '../packing/types'
 import { helpPresentation } from '../packing/helpPresentation'
 import PackingScene from './PackingScene'
 import ProfileSummary from './ProfileSummary'
 import TaskControls from './TaskControls'
+import TaskProgress from './TaskProgress'
 
 const statusLabels = {
   active: '진행 중', paused: '잠시 멈췄어요.', help_requested: '보호자 확인이 필요해요.',
@@ -42,9 +43,7 @@ export default function PackingBagDemo({ profile, state, notice, onAction }: {
       <p>합성 장면을 사용하는 데모입니다. 실제 행동을 자동으로 확인하지 않습니다.</p>
       <p>{profile.user_id === 'demo_A' ? '사용자 A' : '사용자 B'}의 작업</p>
       {notice && <p role="status">{notice}</p>}
-      <h3>진행 상황</h3>
-      <p>{stepOrder.indexOf(state.currentStep) + 1} / 5 · {step.title}</p>
-      <p>{statusLabels[state.taskStatus]}</p>
+      <TaskProgress state={state} />
       <PackingScene targetId={step.target} visualCue={presentation.visualCue} />
       <h3>현재 안내</h3>
       <p role="status">{prompt}</p>
