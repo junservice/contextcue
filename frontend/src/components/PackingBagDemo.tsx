@@ -69,9 +69,9 @@ export default function PackingBagDemo({ profile, state, notice, onAction, obser
       {state.taskStatus === 'help_requested' && <p>실제 알림은 전송되지 않습니다. 보호자 확인은 현재 단계의 수동 진행 입력입니다.</p>}
       {state.taskStatus === 'completed' && <p>수동 입력과 합성 관찰에 따른 데모를 마쳤습니다. 실제 준비 완료 여부는 확인되지 않았습니다.</p>}
       <p>‘다음’은 현재 데모의 임시 수동 진행 버튼입니다. 실제 행동의 성공을 판정하지 않습니다.</p>
-      <p className="packing-future-note">향후 구현 예정: 카메라 관찰 이벤트로 행동 완료가 확인되면 자동으로 다음 단계로 이동하는 구조를 목표로 합니다. 현재는 카메라가 연결되어 있지 않습니다.</p>
+      <p className="packing-future-note">DEMO_OBSERVATION supports synthetic progression through all packing steps. Manual Next and caregiver confirmation remain fallbacks. Actual action success is not verified; no camera or AI is connected.</p>
       <TaskControls state={state} onAction={onAction} />
-      <DemoObservationControls state={observationState} onObservation={onObservation} />
+      <DemoObservationControls state={observationState} profile={profile} onObservation={onObservation} />
       <ProfileSummary profile={profile} />
     </section>
   )

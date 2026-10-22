@@ -1,22 +1,53 @@
 import { initialPackingState, transitionPacking } from '../packing/transitions'
-import type { DemoProgressAction, DemoProgressState, ObservationToken } from './types'
+import type { Profile } from '../types'
+import type { DemoObservation, DemoProgressAction, DemoProgressState, ObservationToken } from './types'
 
 export function initialDemoProgress(): DemoProgressState {
   return {
     packing: initialPackingState(), sessionId: 0, stepEntryId: 0, evidenceEpoch: 0,
-    history: {}, bagLocated: false, orientationTimes: [], seenEventIds: [],
+    history: {}, bagLocated: false, bottleLocated: false, reachedForBottle: false,
+    nearBagOpening: false, orientationTimes: [], seenEventIds: [],
     seenObservationIds: [], lastObservedAt: null, message: '', pendingAuto: false, seenManualIds: [],
   }
 }
 
 function clearEvidence(state: DemoProgressState): DemoProgressState {
   return { ...state, evidenceEpoch: state.evidenceEpoch + 1, bagLocated: false,
+    bottleLocated: false, reachedForBottle: false, nearBagOpening: false,
     orientationTimes: [], seenEventIds: [], seenObservationIds: [], lastObservedAt: null, pendingAuto: false }
 }
 
 function sameToken(state: ObservationToken, token: ObservationToken) {
   return state.sessionId === token.sessionId && state.stepEntryId === token.stepEntryId &&
     state.evidenceEpoch === token.evidenceEpoch
+}
+
+export function canObserve(state: DemoProgressState, profile: Profile): boolean {
+  return state.packing.taskStatus === 'active' && state.packing.currentStep !== 'complete' &&
+    (state.packing.currentStep !== 'put_bottle_in_bag' ||
+      (profile.can_extend_arm === true && profile.can_grasp === true))
+}
+
+export function observationInputs(step: DemoProgressState['packing']['currentStep']): {
+  type: DemoObservation['type']; label: string
+}[] {
+  switch (step) {
+    case 'find_bag': return [
+      { type: 'bag_detected', label: 'Locate bag' },
+      { type: 'user_oriented_to_bag', label: 'Add observation toward bag' },
+    ]
+    case 'find_bottle': return [
+      { type: 'bottle_detected', label: 'Locate bottle' },
+      { type: 'user_oriented_to_bottle', label: 'Add observation toward bottle' },
+    ]
+    case 'put_bottle_in_bag': return [
+      { type: 'user_reached_for_bottle', label: 'Record reach toward bottle' },
+      { type: 'bottle_near_bag_opening', label: 'Record bottle near bag opening' },
+      { type: 'bottle_inside_bag', label: 'Add bottle-inside-bag observation' },
+    ]
+    case 'check_items': return [{ type: 'items_confirmed', label: 'Add items-confirmed observation' }]
+    case 'complete': return []
+  }
 }
 
 // One pure reducer serializes manual and synthetic inputs. Existing transitions stay unchanged.
@@ -41,27 +72,39 @@ export function demoProgressReducer(state: DemoProgressState, action: DemoProgre
     if (packing.currentStep !== state.packing.currentStep) {
       return { ...clearEvidence(state), packing, stepEntryId: state.stepEntryId + 1,
         history: { ...state.history, [state.packing.currentStep]: action.event === 'caregiver_confirm' ? 'caregiver' : 'manual' },
-        message: action.event === 'caregiver_confirm' ? '보호자 확인으로 현재 단계를 수동 진행했습니다.' : '수동 Next로 현재 단계를 진행했습니다. 실제 행동 성공 판정이 아닙니다.' }
+        message: action.event === 'caregiver_confirm' ? 'Advanced manually after caregiver confirmation.' : 'Advanced with manual Next. Actual action success was not verified.' }
     }
     if (packing.taskStatus !== state.packing.taskStatus) {
-      return { ...clearEvidence(state), packing, message: '작업 상태가 변경되어 관찰 증거를 초기화했습니다. 재개 후 새 관찰이 필요합니다.' }
+      return { ...clearEvidence(state), packing, message: 'Task status changed. Observation evidence was cleared; new observations are required after resuming.' }
     }
     return { ...state, packing }
   }
 
   if (action.kind === 'commit_auto') {
-    if (!state.pendingAuto || !sameToken(state, action.token) ||
-      state.packing.currentStep !== 'find_bag' || state.packing.taskStatus !== 'active') return state
+    if (!state.pendingAuto || !sameToken(state, action.token) || !canObserve(state, action.profile)) return state
+    const packing = transitionPacking(state.packing, 'next', action.profile)
+    if (packing.currentStep === state.packing.currentStep) return state
     return { ...clearEvidence(state),
-      packing: transitionPacking(state.packing, 'next', action.profile),
+      packing,
       stepEntryId: state.stepEntryId + 1,
-      history: { ...state.history, find_bag: 'demo_observation' },
-      message: 'DEMO_OBSERVATION 조건 충족으로 물병 찾기로 이동했습니다. 실제 행동 성공을 확인한 결과는 아닙니다.' }
+      history: { ...state.history, [state.packing.currentStep]: 'demo_observation' },
+      message: packing.taskStatus === 'completed'
+        ? 'DEMO_OBSERVATION conditions met. The demo is complete; actual readiness was not verified.'
+        : packing.taskStatus === 'help_requested'
+          ? 'DEMO_OBSERVATION conditions met. The next step requires caregiver confirmation; automatic progression is blocked.'
+          : 'DEMO_OBSERVATION conditions met. Advanced one demo step; actual action success was not verified.' }
   }
 
   const event = action.observation
-  if (state.packing.currentStep !== 'find_bag' || state.packing.taskStatus !== 'active' ||
-    !sameToken(state, event) || event.source !== 'DEMO_OBSERVATION' || event.objectId !== 'bag' ||
+  const step = state.packing.currentStep
+  const relevantType = observationInputs(step).some((input) => input.type === event.type) ||
+    event.type === 'observation_uncertain' || event.type === 'object_lost'
+  const expectedObject = step === 'find_bag' ? 'bag' : 'bottle'
+  const relevantObject = event.objectId === expectedObject ||
+    ((step === 'put_bottle_in_bag' || step === 'check_items') && event.objectId === 'bag' &&
+      (event.type === 'observation_uncertain' || event.type === 'object_lost'))
+  if (!canObserve(state, action.profile) || !relevantType || !relevantObject ||
+    !sameToken(state, event) || event.source !== 'DEMO_OBSERVATION' ||
     !event.eventId || !event.observationId || !Number.isFinite(event.observedAtMs) || event.observedAtMs < 0 ||
     (state.lastObservedAt !== null && event.observedAtMs <= state.lastObservedAt) ||
     state.seenEventIds.includes(event.eventId) || state.seenObservationIds.includes(event.observationId)) return state
@@ -71,15 +114,23 @@ export function demoProgressReducer(state: DemoProgressState, action: DemoProgre
     seenObservationIds: [...state.seenObservationIds, event.observationId] }
   if (event.type === 'observation_uncertain' || event.type === 'object_lost') {
     return { ...clearEvidence(observed), message: event.type === 'observation_uncertain'
-      ? '관찰이 불확실하여 증거를 초기화했습니다. 현재 단계에서 다시 확인합니다.'
-      : '가방이 화면에서 사라져 증거를 초기화했습니다. 도움 수준은 변경하지 않습니다.' }
+      ? 'Observation uncertain. Current-step evidence was cleared; the step is unchanged.'
+      : 'Relevant object lost. Current-step evidence was cleared; the step and help level are unchanged.' }
   }
   if (event.type === 'bag_detected') {
-    return { ...observed, bagLocated: true, message: '합성 장면에서 가방 위치를 확보했습니다. 사용자 행동 성공을 뜻하지 않습니다.' }
+    return { ...observed, bagLocated: true, message: 'Bag located in the synthetic scene. This does not confirm user action success.' }
   }
-  if (event.type !== 'user_oriented_to_bag') return state
-  if (!state.bagLocated) {
-    return { ...observed, message: '가방 위치를 먼저 확보해 주세요. 방향 관찰은 아직 누적하지 않습니다.' }
+  if (event.type === 'bottle_detected') {
+    return { ...observed, bottleLocated: true, message: 'Bottle located in the synthetic scene. This does not confirm user action success.' }
+  }
+  if (event.type === 'user_reached_for_bottle') {
+    return { ...observed, reachedForBottle: true, message: 'Reach evidence recorded. The current step is unchanged.' }
+  }
+  if (event.type === 'bottle_near_bag_opening') {
+    return { ...observed, nearBagOpening: true, message: 'Bottle-near-opening evidence recorded. The current step is unchanged.' }
+  }
+  if ((step === 'find_bag' && !state.bagLocated) || (step === 'find_bottle' && !state.bottleLocated)) {
+    return { ...observed, message: 'Locate the target first. Direction observations are not accumulating yet.' }
   }
   const previous = state.orientationTimes
   const gapTooLong = previous.length > 0 && event.observedAtMs - previous[previous.length - 1] > 1000
@@ -87,10 +138,10 @@ export function demoProgressReducer(state: DemoProgressState, action: DemoProgre
   const ready = times.length >= 3 && times[times.length - 1] - times[0] >= 1000
   if (!ready) {
     return { ...observed, orientationTimes: times, message: gapTooLong
-      ? '관찰 간격이 1초를 넘어 현재 관찰부터 다시 확인합니다.'
-      : '방향 관찰을 확인 중입니다. 횟수와 시간 조건을 모두 충족해야 이동합니다.' }
+      ? 'The observation gap exceeded one second. Accumulation restarted with this observation.'
+      : 'Checking synthetic observations. Both count and duration conditions must be met.' }
   }
   // Commit separately so queued Stop/Help/Pause can invalidate the pending advance.
   return { ...observed, orientationTimes: times, pendingAuto: true,
-    message: 'DEMO_OBSERVATION 조건을 충족했습니다. 중단·도움 요청 여부를 확인한 뒤 다음 단계로 이동합니다.' }
+    message: 'DEMO_OBSERVATION conditions met. Progression is pending a check for stop, help, or pause inputs.' }
 }
