@@ -430,7 +430,7 @@ async def run(args):
         "max_tokens": 4096,
         "timeout_seconds": 60,
         "source_sha256": {
-            str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
+            path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
             for path in [
                 ROOT / "app/tasking/request_review.py",
                 ROOT / "app/tasking/planning.py",

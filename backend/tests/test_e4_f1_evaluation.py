@@ -3,14 +3,20 @@
 import asyncio
 import hashlib
 
+import pytest
+
 from app.tasking.request_review import ControlledRequestReviewer
 from scripts.evaluate_e4 import request_for
 from scripts.evaluate_e4_f1 import OUT, ROOT, datasets, read, run_mock, summarize
 
 
-def test_old_e4_artifacts_are_unchanged_and_new_cohorts_are_disjoint():
+@pytest.mark.parametrize("separator", ["/", "\\"])
+def test_old_e4_artifacts_are_unchanged_and_new_cohorts_are_disjoint(separator):
     for path, expected in read(OUT / "preserved-e4-sha256.json").items():
-        assert hashlib.sha256((ROOT / path).read_bytes()).hexdigest() == expected
+        # Exercise both serialized path styles, including historical Windows keys.
+        path = path.replace("\\", separator)
+        artifact = ROOT / path.replace("\\", "/")
+        assert hashlib.sha256(artifact.read_bytes()).hexdigest() == expected
     _, cases = datasets()
     assert len(cases) == len({c["case_id"] for c in cases}) == 30
     assert sum(c["cohort"] == "regression" for c in cases) == 18

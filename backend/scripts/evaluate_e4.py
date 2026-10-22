@@ -346,7 +346,7 @@ async def run(args):
             subprocess.check_output, ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
         )).strip(),
         "working_tree": "dirty; pre-existing Phase 4 changes preserved",
-        "sha256": {str(path.relative_to(ROOT)): digest(path) for path in [
+        "sha256": {path.relative_to(ROOT).as_posix(): digest(path) for path in [
             DIRECTORY / "cases.json", DIRECTORY / "README.md", Path(__file__),
             ROOT / "app/tasking/planning.py", ROOT / "app/tasking/verification.py",
             ROOT / "app/tasking/service.py", ROOT / "app/tasking/prompting.py",
@@ -390,7 +390,7 @@ async def run(args):
             metadata.update(run_status="interrupted", reason_code="evaluation_runner_failed")
     metadata["finished_at_utc"] = datetime.now(UTC).isoformat()
     save(output, metadata)
-    print(json.dumps({"saved": str(output.relative_to(ROOT)),
+    print(json.dumps({"saved": output.relative_to(ROOT).as_posix(),
                       "records": len(metadata.get("records", []))}), flush=True)
 
 
