@@ -30,6 +30,7 @@ from .models import (
     TaskStep,
     Text,
 )
+from .semantics import SemanticReview
 
 ObservationSource = Literal["camera_observation", "caregiver_report"]
 
@@ -103,6 +104,9 @@ class VerificationContext:
     camera_principals: frozenset[str] = frozenset()
     caregiver_principals: frozenset[str] = frozenset()
     feasibility: Mapping[str, FeasibilityAssessment] = field(default_factory=dict)
+    # Separate request semantics dependency. Action Policy itself remains unchanged;
+    # Service and Prompting enforce this before progressing or emitting a cue.
+    semantic_review: SemanticReview | None = None
 
 
 @dataclass(frozen=True)

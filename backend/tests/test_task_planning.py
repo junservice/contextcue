@@ -21,7 +21,34 @@ from app.tasking.planning import (
     select_reviewed_template,
     start_planned_task,
 )
+from app.tasking.semantics import IntentOperation, IntentTarget, SemanticIntent, review_request
 from app.tasking.verification import VerificationContext
+
+
+def review_for(data):
+    # Independent, manually reviewed synthetic fixture intent, NEVER model output.
+    if data.goal == "pass_through_door":
+        targets = (("button", "door_open_button"), ("opening", "automatic_door_opening"))
+        operations = (
+            ("locate", "target_located", ("button",)),
+            ("press", "pressed", ("button",)),
+            ("observe_state", "state_open", ("opening",)),
+            ("traverse", "passed_through", ("opening",)),
+        )
+    else:
+        assert data.goal == "pack_bag"
+        targets = (("bag", "bag"), ("bottle", "water_bottle"))
+        operations = (
+            ("locate", "target_located", ("bag",)),
+            ("locate", "target_located", ("bottle",)),
+            ("place_inside", "placed_inside", ("bottle", "bag")),
+            ("observe_state", "items_inside", ("bottle", "bag")),
+        )
+    intent = SemanticIntent(
+        targets=tuple(IntentTarget(role=role, concept=concept) for role, concept in targets),
+        operations=tuple(IntentOperation(action=a, outcome=o, roles=r) for a, o, r in operations),
+    )
+    return review_request(data, review_id="synthetic-fixture-review", disposition="ready", intent=intent)
 
 
 class MockProvider:
@@ -69,6 +96,7 @@ def case(request):
 
 
 def run(request, provider, **kwargs):
+    kwargs.setdefault("semantic_review", review_for(request))
     return asyncio.run(generate_plan(request, provider, **kwargs))
 
 
@@ -206,12 +234,24 @@ def test_known_action_cannot_use_an_invented_completion_outcome(case):
         run(data, MockProvider(json.dumps(body)))
 
 
+def test_combined_two_target_locate_is_rejected_even_when_targets_are_known(case):
+    plan, data, _ = case
+    body = plan.model_dump()
+    keys = [target.target_key for target in plan.targets]
+    body["steps"][0]["target_keys"] = keys
+    body["steps"][0]["completion_goal"]["target_keys"] = keys
+    with pytest.raises(PlanningError, match="invalid_target_roles"):
+        run(data, MockProvider(json.dumps(body)))
+
+
 def test_unobserved_semantic_targets_remain_unbound(case):
     plan, data, context = case
     empty_snapshot = ObservationSnapshot(revision="empty")
     data = data.model_copy(update={"observations": empty_snapshot})
     proposal = run(data, MockProvider(plan.model_dump_json()))
-    result = start_planned_task(proposal, replace(context, snapshot=empty_snapshot))
+    result = start_planned_task(
+        proposal, replace(context, snapshot=empty_snapshot), semantic_review=review_for(data)
+    )
     assert result.service.accepted
     assert result.service.state.target_bindings == {}
     assert result.service.state.evidence == []
@@ -263,7 +303,8 @@ def test_verified_template_selection_has_explicit_artifact_version_and_no_ai_mod
     artifact = ReviewedTemplate(template_id="synthetic-reviewed", version="artifact-v7", plan=plan)
     data = data.model_copy(update={"plan_id": "new-plan"})
     selected = select_reviewed_template(
-        data, artifact.template_id, {artifact.template_id: artifact}
+        data, artifact.template_id, {artifact.template_id: artifact},
+        semantic_review=review_for(data),
     )
     assert selected.source == "REVIEWED_TEMPLATE"
     assert selected.mode == "TEMPLATE"
@@ -283,13 +324,16 @@ def test_bad_template_contents_cannot_weaken_policy(case):
     bad.steps[0].action = "invented"
     artifact = ReviewedTemplate(template_id="synthetic-reviewed", version="v1", plan=bad)
     with pytest.raises(PlanningError, match="unsupported_action"):
-        select_reviewed_template(data, artifact.template_id, {artifact.template_id: artifact})
+        select_reviewed_template(
+            data, artifact.template_id, {artifact.template_id: artifact},
+            semantic_review=review_for(data),
+        )
 
 
 def test_only_fresh_verified_proposals_reach_service(case, monkeypatch):
     plan, data, context = case
     proposal = run(data, MockProvider(plan.model_dump_json()))
-    started = start_planned_task(proposal, context)
+    started = start_planned_task(proposal, context, semantic_review=review_for(data))
     assert started.verification.decision == "allow"
     assert started.service.accepted
     assert started.service.state.status == "active"
@@ -301,11 +345,13 @@ def test_only_fresh_verified_proposals_reach_service(case, monkeypatch):
 
     monkeypatch.setattr(planning, "start_task", forbidden)
     proposal.plan.steps[0].action = "invented"
-    assert start_planned_task(proposal, context).verification.decision == "stop"
-    assert start_planned_task(proposal, context).service is None
+    assert start_planned_task(
+        proposal, context, semantic_review=review_for(data)
+    ).verification.decision == "stop"
+    assert start_planned_task(proposal, context, semantic_review=review_for(data)).service is None
 
 
-def test_physical_first_step_needs_confirmation_before_engine_even_with_true_abilities(
+def test_incomplete_physical_only_plan_is_rejected_before_engine_even_with_true_abilities(
     case, monkeypatch
 ):
     plan, data, context = case
@@ -320,14 +366,11 @@ def test_physical_first_step_needs_confirmation_before_engine_even_with_true_abi
         }
     )
     context = replace(context, capabilities=data.capabilities)
-    proposal = run(data, MockProvider(json.dumps(body)))
-    assert proposal.initial_verification.decision == "confirm"
     monkeypatch.setattr(
         planning, "start_task", lambda *a, **kw: pytest.fail("no Engine before binding")
     )
-    result = start_planned_task(proposal, context)
-    assert result.service is None
-    assert result.verification.reason_code == "target_unresolved"
+    with pytest.raises(PlanningError, match="semantic_plan_mismatch"):
+        run(data, MockProvider(json.dumps(body)))
 
 
 def test_task_scope_is_rechecked_before_execution(case, monkeypatch):
@@ -369,6 +412,65 @@ def test_nebius_transport_uses_json_mode_and_mock_client_is_never_labelled_live(
     assert call["max_tokens"] == 4096
     assert call["model"] == provider.model_id
     assert "api_key" not in call
+    assert "extra_body" not in call
+
+
+def test_lightning_emits_direct_json_without_spending_output_budget_on_thinking(case):
+    plan, data, _ = case
+    client = FakeClient(plan.model_dump_json())
+    provider = NebiusPlanProvider(model_id="nvidia/Nemotron-3_5-Lightning", client=client)
+    proposal = run(data, provider)
+    assert proposal.mode == "MOCK_PROVIDER"
+    assert client.calls[0]["extra_body"] == {"chat_template_kwargs": {"enable_thinking": False}}
+    assert client.calls[0]["max_tokens"] == 4096
+    output = client.calls[0]["response_format"]
+    assert output["type"] == "json_schema"
+    variants = output["json_schema"]["schema"]["$defs"]["TaskStep"]["oneOf"]
+    locate = next(v for v in variants if v["properties"]["action"]["enum"] == ["locate"])
+    assert locate["properties"]["target_keys"]["maxItems"] == 1
+    assert locate["properties"]["completion_goal"]["properties"]["outcome"]["enum"] == [
+        "target_located"
+    ]
+    assert proposal.initial_verification.decision == "allow"
+
+
+def test_owned_sdk_uses_the_same_finite_budget_without_automatic_retries(monkeypatch):
+    options = {}
+
+    def factory(**kwargs):
+        options.update(kwargs)
+        return FakeClient()
+
+    monkeypatch.setattr("openai.AsyncOpenAI", factory)
+    NebiusPlanProvider(api_key="synthetic-not-a-secret")
+    assert options["timeout"] == 60
+    assert options["max_retries"] == 0
+
+
+def test_constrained_output_still_allows_refusal_without_starting_engine(case, monkeypatch):
+    _, data, _ = case
+    client = FakeClient("{}")
+    provider = NebiusPlanProvider(model_id="nvidia/Nemotron-3_5-Lightning", client=client)
+    monkeypatch.setattr(
+        planning, "start_task", lambda *a, **kw: pytest.fail("no Engine on refusal")
+    )
+    with pytest.raises(PlanningError, match="invalid_plan_json"):
+        run(data, provider)
+    schema = client.calls[0]["response_format"]["json_schema"]["schema"]
+    assert {"type": "object", "properties": {}, "additionalProperties": False} in schema["anyOf"]
+
+
+def test_generation_default_deadline_matches_sdk_budget(case, monkeypatch):
+    plan, data, _ = case
+    timeouts = []
+
+    async def wait_for(awaitable, timeout):
+        timeouts.append(timeout)
+        return await awaitable
+
+    monkeypatch.setattr(planning.asyncio, "wait_for", wait_for)
+    run(data, MockProvider(plan.model_dump_json()))
+    assert timeouts == [60]
 
 
 @pytest.mark.parametrize(
@@ -401,6 +503,7 @@ def test_provider_errors_are_sanitized_without_raw_error_text(case, status, reas
     "content,finish,choices,reason",
     [
         (None, "stop", True, "empty_response"),
+        (None, "length", True, "incomplete_response"),
         ("{}", "length", True, "incomplete_response"),
         ("{}", "stop", False, "empty_response"),
     ],
@@ -419,10 +522,24 @@ def test_sdk_timeout_and_missing_credentials_are_explicit_and_safe(case, monkeyp
     timeout = APITimeoutError(request=httpx.Request("POST", "https://example.invalid"))
     with pytest.raises(PlanningError, match="provider_timeout"):
         run(data, NebiusPlanProvider(client=FakeClient(error=timeout)))
-    monkeypatch.delenv("NEBIUS_API_KEY", raising=False)
+    for name in ("NEBIUS_API_KEY", "NEBIUS_BASE_URL", "NEBIUS_MODEL"):
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(planning, "dotenv_values", lambda path: {})
     with pytest.raises(PlanningError, match="missing_credentials"):
         NebiusPlanProvider.from_environment()
+
+
+@pytest.mark.parametrize(
+    "host", ["api.tokenfactory.nebius.com", "api.tokenfactory.us-central1.nebius.com"]
+)
+def test_official_nebius_endpoints_are_supported_without_relaxing_https(case, host):
+    plan, data, _ = case
+    provider = NebiusPlanProvider(
+        base_url=f"https://{host}/v1/", client=FakeClient(plan.model_dump_json())
+    )
+    assert run(data, provider).mode == "MOCK_PROVIDER"
+    with pytest.raises(PlanningError, match="invalid_provider_configuration"):
+        NebiusPlanProvider(base_url=f"http://{host}/v1/", client=FakeClient())
 
 
 @pytest.mark.parametrize(

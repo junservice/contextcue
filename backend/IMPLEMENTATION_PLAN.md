@@ -1,9 +1,9 @@
 # ContextCue Backend Implementation Plan
 
-> **Status:** 실행 순서와 진행 상태를 관리하는 Backend 작업 문서 (2026-10-21)
-> **Current phase:** Phase 4 로컬/mock 구현·검증 완료 — 실제 Nebius 호출 및 live 완료 조건은 미검증
-> **Next task:** Phase 5 — Task lifecycle API·세션 경계 설계. AI 계획의 공개 경로는 Phase 4 live 검증을 완료할 때까지 보류
-> **Parallel task:** Nebius Early Smoke Track — `unavailable` (`missing_credentials`, 실제 API 호출 없음). 사용자 요청에 따라 키 없이 mock 검증 완료
+> **Status:** 실행 순서와 진행 상태를 관리하는 Backend 작업 문서 (2026-10-22)
+> **Current phase:** Phase 4 완료 + F1 production adapter 연결 및 후속 E4 실측 완료 (2026-10-22). 60 시도/실제 Nebius 36회, 정상 수용 22/40·보류 필요 차단 20/20; E4 전체는 개선 필요
+> **Next task:** F3의 target/effect 품질, F2 역할/참조, F4 모델 보류 사유 및 요청 문법 coverage 검토. Phase 5 API/세션·공개 API/Frontend 연결은 미구현 유지
+> **Parallel task:** Nebius Early Smoke Track — `passed` (2026-10-22), 공식 public endpoint와 설정된 NVIDIA 모델에서 최소 JSON 실호출 성공
 
 이 문서는 새로운 개발 세션에서도 ContextCue Backend 작업을 안전한 순서로 이어가기 위한 실행 계획이다. 제품 범위는 `docs/PROJECT_PLAN.md`, 모듈과 데이터 경계는 `docs/SYSTEM_ARCHITECTURE.md`, 자동문 행동 기준은 `docs/scenarios/automatic-door.md`를 우선한다. 실제 구현 여부는 항상 코드와 테스트를 다시 확인한다.
 
@@ -94,13 +94,13 @@ Service는 호출자가 넘긴 plan/state/backend 컨텍스트만 사용하는 �
 - [x] Service/Engine 호출 전 Phase 2 gate 재검증 및 두 합성 fixture의 동일 생성·시작 경로 확인
 - [x] Phase 4 검증 기준: 기존 396개 + 신규 mock 101개 = 497개 테스트 및 Ruff 통과 (2026-10-21)
 
-기존 `AsyncOpenAI`를 사용하는 opt-in Nebius provider 코드는 추가했으나 실제 호출은 하지 않았다. Early Smoke 사전 점검은 `missing_credentials`로 `unavailable`이며, 사용자 선택에 따라 mock 검증만 완료했다. production template은 승격하지 않았고 테스트용 합성 reviewed registry만 사용했다. 공개 API·세션 저장·실제 관찰 adapter는 추가하지 않았다.
+초기 구현(2026-10-21)은 키 없이 mock 검증만 완료했다. 이후 live 검증에서 추론 토큰 소진·30초 timeout을 재현하고 현재 Lightning 모델의 추론 제어, 정책 기반 provider schema, 60초 전체 deadline을 적용했다. 최종 **512 passed**, Ruff 통과 및 자동문·가방 각 2회 **LIVE_NEBIUS TaskPlan 4/4 통과**를 확인했다. 거부 입력은 계획을 실행하지 않았다. production template 승격, 공개 API·세션 저장·실제 관찰 adapter는 아직 추가하지 않았다. 상세 진단·중간 실패·최종 결과는 Phase 4 기록에 남긴다.
 
 ### 아직 구현되지 않은 목표
 
 - [ ] 실제 source adapter를 연결한 행동 완료 Evidence 검증 (결정론적 정책/승격 경계는 구현됐으나 실제 관찰은 미검증)
-- [ ] AI Task Planner의 실제 모델 출력 안정성·latency 검증 및 production Template 검토·승격
-- [ ] Nebius Early Smoke와 실제 모델 접근/최소 JSON 검증
+- [ ] production Template 검토·승격 및 별도 평가 세트의 계획 적절성/holdout 검증
+- [x] Nebius Early Smoke와 실제 모델 접근/최소 JSON 검증 (2026-10-22, TaskPlan 최종 생성 검증도 통과)
 - [ ] 신규 Task lifecycle API와 세션 보관
 - [ ] Frontend Task Engine 연결
 - [ ] 실제 카메라/검출기, ASR, 음성 출력
@@ -113,7 +113,7 @@ Service는 호출자가 넘긴 plan/state/backend 컨텍스트만 사용하는 �
 - 현재 자동문 응답은 버튼 위치 찾기와 누르기 능력을 하나의 보수적 검사로 묶는다. 새 Task Engine에서는 `locate`와 `press`를 별도 단계로 모델링하되 레거시 API 동작을 무심코 변경하지 않는다.
 - Frontend 가방 데모의 `next`와 `caregiver_confirm`은 다음 단계로 이동하지만 실제 Evidence를 저장하지 않는다. 화면의 `completed`는 관찰된 실제 완료가 아니다.
 - 현재 장면은 `DEMO_SCENE` fixture이며 실제 카메라 인식이 아니다.
-- `LIVE_NEBIUS` 호출 코드는 존재하지만 실제 모델 가용성·구조화 출력·지연은 검증되지 않았다.
+- 설정된 `nvidia/Nemotron-3_5-Lightning`에서 최소 JSON 및 두 합성 과제의 TaskPlan 생성·초기 Service 진입은 검증했다. 최종 TaskPlan 지연은 약 6.0–32.3초이며, 60초 deadline 안에서 확인한 소규모 구현 검증이다. 기본 후보 모델·다른 계정/endpoint·일반 상황의 계획 적절성·실제 행동 성공을 입증하지 않는다.
 
 ## 3. 확정된 설계 결정
 
@@ -278,9 +278,11 @@ Nebius early smoke는 Phase 1과 병행할 수 있다. 접근 실패나 계정 �
 
 ## 6A. 병행 Track — Nebius Early Smoke
 
-**상태:** `unavailable` (2026-10-21) — `missing_credentials`, 실제 API 호출 없음. Track 구현 체크박스는 미완료
+**상태:** `passed` (2026-10-22) — `LIVE_NEBIUS` 최소 JSON 실호출 성공, TaskPlan 성공과 구분
 
 Phase 4 선행 점검에서 기존 endpoint/model 설정을 재사용하는 임시 실행으로 키 존재 여부를 확인했다. 결과는 `api_call_attempted=false`, endpoint host `api.tokenfactory.us-central1.nebius.com`, model ID `nvidia/nemotron-3-nano-omni`다. 계정 접근·JSON 응답·latency는 확인하지 못했으며, 사용자는 키 없이 mock 검증을 완료하고 live 미검증으로 기록하도록 요청했다. 별도 smoke entrypoint는 추가하지 않았다.
+
+위 내용은 2026-10-21 초기 기록이다. 2026-10-22 Phase 4 재검증에서는 `scripts/verify_phase4.py`의 최소 smoke 1회가 endpoint host `api.tokenfactory.nebius.com`, model ID `nvidia/Nemotron-3_5-Lightning`에서 **passed**, latency **16,439.6 ms**, Pydantic schema 검증 **통과**했다. 합성 object ID 한 개만 선택했으며 실제 카메라나 행동 완료를 검증한 것은 아니다. 같은 실행의 TaskPlan 4회는 모두 timeout으로 실패했다.
 
 **목표:** 전체 AI Task Planner를 만들기 전에 현재 계정의 모델 접근 권한, API 연결, 최소 JSON 출력 가능성을 가장 작은 live 호출로 확인한다.
 
@@ -292,25 +294,25 @@ Phase 4 선행 점검에서 기존 endpoint/model 설정을 재사용하는 임�
 
 **예상 수정 대상**
 
-- `scripts/nebius_smoke.py` 신규
+- `scripts/verify_phase4.py` — Phase 4 재현 스크립트의 최소 smoke 사용 (`scripts/nebius_smoke.py`는 별도로 추가하지 않음)
 - 필요 시 `.env.example` 설명만 보완
 - Smoke 결과 기록은 이 문서 또는 비밀정보가 없는 별도 문서
 
 **작업**
 
-- [ ] 별도 dependency 없이 기존 `AsyncOpenAI` 설정을 재사용하는 opt-in smoke entrypoint 추가
-- [ ] 합성 scene의 기존 object ID 하나만 선택하는 최소 JSON schema로 호출하고, provider의 JSON/structured-output 옵션과 Pydantic 검증을 통과하는지 확인
-- [ ] 자격 증명 누락, 인증/권한 오류, model unavailable, timeout, 빈 응답, JSON schema 오류, 성공을 구분
-- [ ] 성공 시 실제 사용한 endpoint 구분, model ID, latency, schema 통과 여부만 기록
-- [ ] API key, authorization header, raw 민감 prompt/response를 출력하거나 커밋하지 않음
-- [ ] 실패 시 demo 결과로 fallback하지 않고 실패 유형을 그대로 보고
+- [x] 별도 dependency 없이 기존 `AsyncOpenAI` 설정을 재사용하는 opt-in smoke entrypoint 추가
+- [x] 합성 scene의 기존 object ID 하나만 선택하는 최소 JSON schema로 호출하고, provider의 JSON/structured-output 옵션과 Pydantic 검증을 통과하는지 확인
+- [x] 자격 증명 누락, 인증/권한 오류, model unavailable, timeout, 빈 응답, JSON schema 오류, 성공을 구분 — 오류 분류는 mock, 실제 timeout과 smoke 성공은 live로 확인
+- [x] 성공 시 실제 사용한 endpoint 구분, model ID, latency, schema 통과 여부만 기록
+- [x] API key, authorization header, raw 민감 prompt/response를 출력하거나 커밋하지 않음
+- [x] 실패 시 demo 결과로 fallback하지 않고 실패 유형을 그대로 보고
 
 **테스트 및 완료 기준**
 
-- [ ] 실제 호출이 성공하면 `LIVE_NEBIUS` smoke로 명시하고 최소 JSON이 현재 schema로 검증된다.
-- [ ] 호출을 실행하지 않았거나 실패했다면 `not_run` 또는 `unavailable`로 기록하고 성공으로 체크하지 않는다.
-- [ ] smoke 성공은 Generic TaskPlan 생성, 안전성, 실제 카메라 또는 행동 완료를 입증하지 않는다.
-- [ ] smoke 결과와 무관하게 Phase 1 로컬 테스트 구현을 계속할 수 있다.
+- [x] 실제 호출이 성공하면 `LIVE_NEBIUS` smoke로 명시하고 최소 JSON이 현재 schema로 검증된다.
+- [x] 호출을 실행하지 않았거나 실패했다면 `not_run` 또는 `unavailable`로 기록하고 성공으로 체크하지 않는다.
+- [x] smoke 성공은 Generic TaskPlan 생성, 안전성, 실제 카메라 또는 행동 완료를 입증하지 않는다.
+- [x] smoke 결과와 무관하게 Phase 1 로컬 테스트 구현을 계속할 수 있다.
 
 Phase 4에서는 이 결과를 출발점으로 TaskPlan 크기의 구조화 출력 안정성과 오류 처리를 다시 검증한다. Early smoke를 Phase 4 전체 완료로 간주하지 않는다.
 
@@ -635,7 +637,7 @@ Phase 2가 외부 관찰의 진위·출처를 판정하는 정책과 Engine 진�
 
 ## 10. Phase 4 — 구조화된 AI Task Planner와 실제 모델 검증
 
-**상태:** 로컬/mock 구현·검증 완료 (2026-10-21) — 사용자 요청에 따라 live 검증은 보류, 실제 모델 검증 체크박스와 live 완료 조건은 미완료
+**상태:** 완료 (2026-10-22) — 현재 계정/endpoint/Lightning 모델 및 두 합성 과제 범위에서 로컬/mock과 최종 live 완료 기준 충족
 
 **목표:** 목표·프로필·관찰을 바탕으로 TaskPlan 제안을 생성하되 trusted verification 밖에서는 실행하지 않는다.
 
@@ -663,19 +665,19 @@ Phase 2가 외부 관찰의 진위·출처를 판정하는 정책과 Engine 진�
 - [x] 잘못된 JSON, unknown action, 허위 candidate object ID 처리
 - [x] 검증된 Template 선택과 AI 생성 source를 명시적으로 구분
 - [x] live 호출 실패 시 `DEMO_RULES`로 몰래 fallback하지 않음
-- [ ] Early Smoke에서 확인한 endpoint/model을 사용해 TaskPlan 크기의 JSON 안정성, latency, 오류 처리 재검증
+- [x] Early Smoke에서 확인한 endpoint/model을 사용해 TaskPlan 크기의 JSON 안정성, latency, 오류 처리 재검증 — 최초 0/4 timeout을 수정하고 최종 TaskPlan 4/4 및 거부 입력 실행 차단 확인
 
 **테스트 및 완료 기준**
 
 - [x] mock provider로 정상/잘못된 JSON/timeout/unknown ID 경로 검증
 - [x] AI 제안은 Phase 2 verification을 통과하기 전 Engine에 들어가지 않는다.
 - [x] AI가 completion policy를 완화할 수 없다.
-- [ ] 실제 live 검증을 했다면 재현 가능한 비밀정보 없는 결과를 기록한다. — live 미실행으로 해당 없음, 실제 성공 기록은 미완료
+- [x] 실제 live 검증을 했다면 재현 가능한 비밀정보 없는 결과를 기록한다. — 2026-10-22 아래 성공/실패 결과와 재현 명령 기록
 - [x] live 검증을 하지 않았다면 `LIVE_NEBIUS` 완료로 표시하지 않는다.
 
 Early Smoke가 `unavailable`이어도 mock provider를 이용한 planning 구조와 검증 테스트는 진행할 수 있다. 단, 실제 모델 관련 체크박스와 Phase 4의 live 완료 조건은 열린 상태로 남긴다.
 
-**구현 선택과 인수인계**
+**초기 로컬 구현과 인수인계 (2026-10-21)**
 
 - 변경 파일: 신규 `app/tasking/planning.py`, 신규 `tests/test_task_planning.py`, 이 계획서. 기존 `app/planner.py`·공개 schema/API·Frontend·dependencies·`.env.example`은 변경하지 않았다.
 - 실제 검사: `backend/`에서 `uv sync --group dev` 성공, 최종 `uv run pytest` **497 passed** (기존 396개 + 신규 planning mock 101개), `uv run ruff check .` **All checks passed!**. 기존 Starlette deprecation warning 1개 및 uv의 `SSL_CERT_DIR` 경고가 남는다.
@@ -686,6 +688,68 @@ Early Smoke가 `unavailable`이어도 mock provider를 이용한 planning 구조
 - **live 결과:** Early Smoke `unavailable`, reason `missing_credentials`, `api_call_attempted=false`. endpoint host `api.tokenfactory.us-central1.nebius.com`, model ID `nvidia/nemotron-3-nano-omni`는 설정값이며 접근 성공 결과가 아니다. 실제 TaskPlan 응답·schema 통과율·latency·오류 재현 결과는 없다. 사용자가 키 없이 mock 완료를 선택했으므로 추가 live 호출은 진행하지 않았다.
 - **모드와 한계:** 테스트는 `MOCK_PROVIDER`와 합성 `TEMPLATE`만 사용했다. SDK 주입 client도 mock으로 표시한다. `DEMO_SCENE` 수집·`DEMO_RULES` fallback·`LIVE_NEBIUS` 호출·실제 카메라·행동 수행 검증은 실행하지 않았다. API/세션/인증된 source adapter는 미구현이며 공개 AI 경로는 아직 열지 않는다.
 - 바로 다음 작업: **Phase 5**에서 세션 보관·state version·event 순서 규칙과 Task lifecycle API 계약을 정한다. AI 계획을 공개 경로에 연결하기 전에는 남은 Phase 4 Early Smoke 및 TaskPlan 규모 live 검증을 별도로 완료해야 한다. 이번 작업에서는 Phase 5나 다른 Phase를 구현하지 않았고 commit/push하지 않았다.
+
+**최초 live 재검증과 실패 기록 (2026-10-22)**
+
+- 검증 전 working tree는 clean, 브랜치는 `docs/generic-task-engine-architecture`였다. `.env`의 live 설정과 키는 유지하고 값은 출력하지 않았다. 현재 계정과 사용자가 설정한 모델만 검증했으며 다른 모델로 전환하지 않았다.
+- 발견/수정: provider가 기존 regional host 하나만 허용하여 공식 public host `api.tokenfactory.nebius.com`을 `invalid_provider_configuration`으로 차단했다. [Nebius 공식 API 문서](https://docs.tokenfactory.nebius.com/api-reference/introduction)를 확인하고 두 host만 명시적으로 허용했다. HTTPS, userinfo/query/fragment 및 port 제한은 유지한다. 초기 사전 점검에서는 API 호출이 없었다.
+- 발견/수정: 키 누락 테스트 2건이 실제 `.env`에서 로드한 endpoint/model의 영향을 받아 `missing_credentials` 대신 설정 오류로 실패했다. 테스트의 세 환경변수를 모두 격리하고 공식 endpoint/HTTPS 회귀 테스트 4건을 추가했다.
+- 변경 파일: `app/tasking/planning.py`, `tests/test_task_planning.py`, 신규 `scripts/verify_phase4.py`, 이 계획서. 공개 API/schema, legacy planner, Frontend, dependencies, `.env`는 변경하지 않았다. Phase 5 구현이나 commit/push는 하지 않았다.
+- 실제 로컬 검사: `uv sync --group dev` 성공. 최초 `uv run pytest`는 **495 passed, 2 failed**, 보완 후 **501 passed** (planning mock 105개), 최종 `uv run ruff check .` **All checks passed!**. 기존 Starlette deprecation warning 1개와 uv의 `SSL_CERT_DIR` 경고가 남는다. opt-in 스크립트는 `--live` 없이는 호출하지 않는 것도 확인했다.
+- 재현 명령 (`backend/`): `uv run python -m scripts.verify_phase4 --live --samples 2`. `.env`의 `PLANNER_MODE=live`와 명시적 `--live`가 필요하며 실제 과금 가능한 요청을 최대 5회 보낸다. 재시도나 demo/template fallback은 없다. 스크립트는 합성 입력을 사용하며 metadata만 출력하고 원문 응답은 저장하지 않는다.
+- 실제 endpoint host: `api.tokenfactory.nebius.com`, model ID: `nvidia/Nemotron-3_5-Lightning`, response format: `json_object`, max output tokens: 4096, SDK/전체 요청 timeout: 30초, SDK retries: 0. [공식 JSON 문서](https://docs.tokenfactory.nebius.com/ai-models-inference/json)에 따라 JSON object 모드와 로컬 schema/policy 검증을 사용하며 provider가 TaskPlan schema를 강제한다고 주장하지 않는다.
+
+| 실제 호출 | 결과 | 관측 시간 (ms) | schema/실행 검증 |
+|---|---|---:|---|
+| 최소 JSON smoke | `passed` / `LIVE_NEBIUS` | 16,439.6 | 기존 합성 ID 1개, Pydantic 통과 |
+| 자동문 TaskPlan #1 | `provider_timeout` | 30,000.5 | 응답 대기 중 제한 도달, schema/Engine 미도달 |
+| 가방 TaskPlan #1 | `provider_timeout` | 30,023.4 | 응답 대기 중 제한 도달, schema/Engine 미도달 |
+| 자동문 TaskPlan #2 | `provider_timeout` | 30,037.7 | 응답 대기 중 제한 도달, schema/Engine 미도달 |
+| 가방 TaskPlan #2 | `provider_timeout` | 30,012.3 | 응답 대기 중 제한 도달, schema/Engine 미도달 |
+
+- 최종 live 실행은 exit code **1**, 실제 요청 시도 **5회**, TaskPlan 성공 **0/4**다. 이는 JSON이 4회 잘못됐다는 뜻이 아니라 응답을 받지 못해 구조화 출력 안정성을 판정할 수 없다는 뜻이다. smoke 성공으로 인증/최소 생성은 확인했지만 TaskPlan 생성과 Service 연결의 live 성공은 입증하지 못했다. timeout 원인이 모델 추론량·요청 크기·provider 대기 중 무엇인지는 아직 확정하지 않았다.
+- **완료 판단:** Phase 4 전체 완료로 표시하지 않는다. 완료 정책·unknown ID·잘못된 JSON·오류 처리의 로컬/mock 검증은 통과했고 실제 실패를 demo 성공으로 숨기지 않았다. smoke는 `LIVE_NEBIUS` 성공, 실제 TaskPlan은 실패, Template은 합성 registry 검증으로 구분한다. 실제 카메라·신체 수행·행동 완료·production template 승격은 검증하지 않았다.
+- **바로 다음 작업:** Phase 4에서 현재 모델의 TaskPlan 지연을 진단하고 요청/timeout 설정을 검토한 뒤 같은 endpoint/model로 재검증한다. 안정적인 TaskPlan 응답과 실행 전 gate 통과를 확인할 때까지 Phase 5 및 공개 AI 계획 연결은 보류한다.
+
+**TaskPlan 생성 문제 해결 및 최신 인수인계 (2026-10-22)**
+
+- **원인 실측:** 기존 요청을 90초 진단 제한 안에서 스트리밍으로 계측했다. 첫 delta는 **7,174.6 ms**였지만 최종 JSON은 없었다. **60,901.2 ms** 뒤 `finish_reason=length`, completion **4,096 tokens**를 모두 사용하고 reasoning 문자 수 **17,972**, 최종 content 문자 수 **0**으로 끝났다. 따라서 대기 시간을 늘리는 것만으로는 해결되지 않는다. 추론 원문은 출력/저장하지 않았다.
+- **수정:** 현재 Nebius 모델 ID `nvidia/Nemotron-3_5-Lightning`에만 `chat_template_kwargs.enable_thinking=false`를 적용한다. [NVIDIA 공식 모델 카드](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16/blob/main/README.md)의 제어 옵션을 현재 Nebius endpoint에서 직접 검증했다. 다른 모델의 지원을 추정해 동일 옵션을 강제하지 않는다.
+- **출력 계약:** trusted `ACTION_POLICIES`에서 action/outcome/대상 수를 반영한 JSON schema를 만들고, 현재 모델에는 provider의 `json_schema` 모드로 전달한다. 대상 순서·step과 completion의 target key 일치 및 unbound 상태를 prompt에 명시한다. 모델이 능력·Evidence·좌표·완료 정책을 만들 수 없으며 로컬 `TaskPlan` 검증과 Phase 2 gate를 모두 유지한다. 거부·모호성의 빈 객체 응답도 명시적 schema 분기로 허용하고 로컬 검증에서 Engine 진입을 차단한다.
+- **시간/오류:** 추론 해제 후에도 반복 호출의 응답 시간 변동으로 30초 timeout이 관측되어 SDK timeout과 전체 `generate_plan` deadline을 동일한 **60초**로 맞췄다. 최소 smoke의 전체 제한은 30초다. 출력 한도는 **4,096 tokens**, SDK retries는 **0**이며 자동 재호출·다른 모델·demo/template fallback을 추가하지 않았다. content가 비어 있어도 `finish_reason=length`이면 `incomplete_response`로 분류하여 토큰 소진을 빈 응답과 구분한다.
+- **중간 결과도 보존:** 추론만 끈 최초 비교는 약 20.9초 뒤 JSON을 생성했으나 `unsupported_outcome`으로 거부됐다. 첫 prompt 보완 뒤에는 자동문 1회 성공/가방 1회 `invalid_target_roles`였다. 정책 schema를 추가한 30초 반복은 **4/6**, 60초 반복은 **6/6** 통과했다. 거부 분기의 첫 schema 표현에서는 **2/4**여서 완료 처리하지 않았고, plan/빈 객체를 명시적으로 나눈 최종 schema로 아래 **4/4**와 별도 거부 차단을 확인했다. 이 문제 해결 작업의 진단·중간 실패·최종 검증을 합친 실제 API 요청 시도는 **33회**다.
+- **최종 재현 명령:** `backend/`에서 `uv run python -m scripts.verify_phase4 --live --samples 2`. 같은 `.env`의 public endpoint와 모델을 사용한다. 합성 입력만 사용하며 schema/policy 검증, 필수 action 순서, 정상 과제의 실제 `allow`/Service 진입, Evidence/binding 미생성, unbound 물리 행동 차단과 `AI_GENERATED`/`LIVE_NEBIUS` 출처를 확인한다. timeout·schema 실패·확인 필요 상태를 정상 과제 성공으로 세지 않는다.
+
+| 최종 실제 호출 | 결과 | 관측 시간 (ms) | 검증 |
+|---|---|---:|---|
+| 최소 JSON smoke | `passed` | 12,793.8 | Pydantic schema 통과 |
+| 자동문 TaskPlan #1 | `passed` | 32,286.4 | 4 steps / 2 targets, 정책·Service 진입·물리 행동 차단 통과 |
+| 가방 TaskPlan #1 | `passed` | 12,207.9 | 4 steps / 2 targets, 정책·Service 진입·물리 행동 차단 통과 |
+| 자동문 TaskPlan #2 | `passed` | 6,995.6 | 4 steps / 2 targets, 정책·Service 진입·물리 행동 차단 통과 |
+| 가방 TaskPlan #2 | `passed` | 6,028.8 | 4 steps / 2 targets, 정책·Service 진입·물리 행동 차단 통과 |
+| 별도 합성 거부 입력 | 계획 미수용 / Engine 미호출 | 14,667.0 | `invalid_plan_json`, 성공/행동 지시로 승격하지 않음 |
+
+- 최종 재현 실행은 **exit code 0**, smoke 포함 **5회**, TaskPlan **4/4** 통과다. 별도 거부 입력 1회도 실행 차단을 확인했다. 현재 endpoint host는 `api.tokenfactory.nebius.com`, model ID는 `nvidia/Nemotron-3_5-Lightning`으로 유지했다. 모델 원문·키는 로그/문서에 남기지 않았다.
+- **실제 로컬 검사:** 최종 `uv run pytest` **512 passed** (기존 501개 + 이번 회귀 11개), `uv run ruff check .` **All checks passed!**. 기존 Starlette deprecation warning 1개와 uv의 `SSL_CERT_DIR` 경고가 남는다. 테스트는 추론 제어와 schema 전달, 두 대상을 합친 잘못된 locate, 토큰 소진 오류 분류, SDK/전체 deadline 일치 및 거부 출력 실행 차단을 포함한다.
+- **변경 파일:** `app/tasking/planning.py`, `tests/test_task_planning.py`, `scripts/verify_phase4.py`, 이 계획서. 기존 변경과 별도 `EVALUATION_PLAN.md`는 보존했다. `.env`, 공개 API/schema, legacy planner, Frontend, dependencies는 수정하지 않았다. 다른 Phase 구현 및 commit/push는 하지 않았다.
+- **완료 범위와 다음 작업:** Phase 4의 구현/live 검증은 현재 모델과 합성 과제 범위에서 완료했다. 소규모 반복 결과는 latency 보장이나 별도 Evaluation Plan의 holdout/계획 적절성 평가 통과를 뜻하지 않는다. 실제 관찰·신체 수행·행동 완료·production Template은 여전히 미검증이다. 다음은 **Phase 5 Task lifecycle API·세션 경계 설계**이며 이번 작업에서 구현하지 않았다.
+
+### E4 F1 후속 보완 — 의미적 계획 검증 (2026-10-22)
+
+- 요청 의미 검토와 전체 계획의 action/target/outcome 검증을 `app/tasking/semantics.py`에 독립 구현했다. 세부 계약·신뢰 가정·미구현 범위는 [SEMANTIC_VERIFICATION.md](SEMANTIC_VERIFICATION.md)를 따른다.
+- 모델 출력·goal 이름에서 스스로 승인을 만들지 않고, backend가 독립 검토한 불변 `SemanticReview`/`SemanticIntent`를 요구한다. 검토 없음·unsupported·ambiguous·unknown은 확인, unsafe/refused는 중단이다. 자유문장 자동 안전 해석기나 production 인증/검토 adapter는 추가하지 않았으며, 없을 때 보류하도록 구현했다.
+- 생성/Template 선택, 실행 시작, 이후 Service의 진행·Evidence 처리와 직접 Prompting에서 의미를 재검증한다. review는 task/plan/goal/발화 fingerprint에 묶고, action-object 의미 역할·전체 필수 결과·순서·대상 qualifier·추가 행동을 검사한다. 검토·plan의 변경이나 cached allow로 우회하지 못한다.
+- Generic Engine과 TaskPlan·공개 API/schema는 변경하지 않았다. Trusted Action Policy의 능력·binding·reachability·Evidence 검증 규칙은 그대로이며 `VerificationContext`에 별도 의미 검토 dependency만 추가했다. 의미 승인은 물리 수행이나 완료 증거를 만들지 않는다.
+- d11 실제 실패 2건·h05 실패 1건을 **mock replay**하여 model 호출 및 Service 진입/잘못된 cue 차단을 확인했다. 신규 의미 회귀 41개와 역사 E4 runner preflight 1개를 추가했고 전체 `uv run pytest` **559 passed**, `uv run ruff check .` 및 `git diff --check` 통과. 기존 Starlette warning 1개와 uv 인증서 경고는 유지된다.
+- 기존 fixture/스모크 호출자는 고정 합성 intent를 명시적으로 전달한다. 독립 요청 검토 adapter가 없는 과거 E4 `--live` 실행은 호출 전 중단하고, baseline 원본/데이터셋/채점 기준을 보존한다. 이번에는 새 LIVE_NEBIUS 호출·프롬프트 수정·Phase 5 구현·commit/push가 없다. F1 이후 실제 모델 품질과 사람 채점은 별도 미실행이다.
+
+> **직전 Phase 4 후속:** F1의 `ControlledRequestReviewer`와 `generate_reviewed_plan`을
+> 실제 Nebius 경로에 연결했다. 제한된 영어 문장 전체를 해석해 goal과 대조하고,
+> 미인식·충돌·위험·거부는 호출 전 보류/중단한다. 기존 경계·Action Policy·Engine은
+> 유지하며 공개 API는 추가하지 않았다. 기존 E4는 보존하고 새 `e4_f1_v2`에서
+> 60회 시도(실제 호출 36회), 정상 수용 22/40, 부적절 요청 차단 20/20을 기록했다.
+> pytest 582개·Ruff 통과. 자세한 F1 판정과 F2–F5 우선순위는 평가 계획 10장 참조.
+> 이 기록은 Phase 5 착수나 E4 전체 통과를 뜻하지 않는다.
 
 ## 11. Phase 5 — Task lifecycle API와 세션 경계
 

@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from .engine import CompletionEvaluation, apply_event, create_task_state
 from .models import TaskEvent, TaskPlan, TaskState
 from .prompting import Cue, Guidance, select_cue
+from .semantics import verify_execution_semantics
 from .verification import (
     VerificationContext,
     VerificationResult,
@@ -50,6 +51,9 @@ class ServiceResult:
 
 
 def _probe(plan: TaskPlan, state: TaskState, context: VerificationContext) -> VerificationResult:
+    semantic = verify_execution_semantics(plan, context)
+    if semantic.decision != "allow":
+        return VerificationResult(semantic.decision, semantic.reason_code)
     if state.current_step_id is None:
         return VerificationResult("confirm", "invalid_current_step")
     return verify_event(
@@ -178,6 +182,9 @@ def handle_event(
 
     if current.status != "active":
         return ServiceResult(current, False, "invalid_transition")
+    semantic = verify_execution_semantics(plan, context)
+    if semantic.decision != "allow":
+        return _hold(current, VerificationResult(semantic.decision, semantic.reason_code))
     if event.type == "cue_issued":
         check = verify_event(plan, current, event, context)
         if check.decision != "allow":

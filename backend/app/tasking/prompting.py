@@ -6,6 +6,7 @@ from typing import Literal, Self
 from pydantic import ConfigDict, model_validator
 
 from .models import HelpLevel, TaskEvent, TaskModel, TaskPlan, TaskState, Text
+from .semantics import verify_execution_semantics
 from .verification import VerificationContext, verify_event
 
 Guidance = Literal["visual_highlight", "arrow", "voice"]
@@ -47,6 +48,8 @@ def select_cue(
     if any(mode not in ("visual_highlight", "arrow", "voice") for mode in preferred_guidance):
         raise ValueError("unsupported guidance preference")
     if state.current_step_id is None:
+        return None
+    if verify_execution_semantics(plan, context).decision != "allow":
         return None
     check = verify_event(
         plan,

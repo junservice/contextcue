@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -17,6 +18,7 @@ from app.tasking.models import (
 )
 from app.tasking.service import handle_event, start_task
 from app.tasking.verification import EvidenceReceipt, VerificationContext
+from scripts.verify_phase4 import synthetic_scenario_review
 
 
 @pytest.fixture(params=["automatic_door.json", "packing_bag.json"])
@@ -56,6 +58,11 @@ def service_case(request):
             )
             for s in plan.steps
         },
+        semantic_review=synthetic_scenario_review(
+            SimpleNamespace(task_id="task", plan_id=plan.plan_id, goal=plan.goal,
+                            transcript="Manually reviewed synthetic door/bag fixture."),
+            "automatic_door" if request.param == "automatic_door.json" else "packing_bag",
+        ),
     )
     return plan, bindings, context
 

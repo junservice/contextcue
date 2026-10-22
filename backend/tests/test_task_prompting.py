@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
@@ -16,6 +17,7 @@ from app.tasking.models import (
 )
 from app.tasking.prompting import Cue, select_cue
 from app.tasking.verification import VerificationContext
+from scripts.verify_phase4 import synthetic_scenario_review
 
 
 @pytest.fixture
@@ -33,6 +35,11 @@ def prompt_case():
         plan_id=plan.plan_id,
         snapshot=snapshot,
         capabilities=CapabilityFacts(can_press_button=True, can_extend_arm=True),
+        semantic_review=synthetic_scenario_review(
+            SimpleNamespace(task_id="task", plan_id=plan.plan_id, goal=plan.goal,
+                            transcript="Manually reviewed synthetic door fixture."),
+            "automatic_door",
+        ),
     )
     state = create_task_state(plan, "task")
     state.target_bindings = {

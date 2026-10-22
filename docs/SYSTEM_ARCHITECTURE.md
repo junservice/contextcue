@@ -16,6 +16,16 @@
 
 ## 2. 현재 구현 경로 (2026-10-21 main 기준)
 
+**후속 내부 구현 (2026-10-22):** Phase 1–4의 최신 구현은 Backend 구현 계획을
+따른다. E4 F1 보완은 [의미 검증 계약](../backend/SEMANTIC_VERIFICATION.md)에
+정리했다. 독립 backend 요청 검토 → 전체 계획의 목표/action/target 의미 검증 →
+기존 Action Policy의 능력·binding·물리/Evidence 검증 → Generic Engine 순서다.
+Service 진행과 Prompting도 의미를 재검증하며 Engine에는 과제별 의미 분기를 넣지
+않는다. 후속 `ControlledRequestReviewer`는 제한된 영어 요청 전체를 해석하고
+goal과 대조하며 `generate_reviewed_plan`을 통해 실제 Nebius provider에 연결된다.
+지원하지 않는 자유문장·위험·거부는 확인/중단으로 보류한다. 아래 흐름은 기존
+공개 API/Frontend 스냅샷이며, 새 Task API·세션·검토 UI를 구현했다는 뜻이 아니다.
+
 ```mermaid
 flowchart LR
   A[Frontend: App.tsx] -->|transcript + profile + scene_objects| B[POST /api/plan]
