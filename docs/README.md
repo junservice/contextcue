@@ -7,6 +7,7 @@
 | [PROJECT_PLAN.md](PROJECT_PLAN.md) | 왜 만들며, 누구를 위해, 이번 MVP에서 무엇을 끝낼 것인가? | 제품 목표·요구사항·수용 기준의 상위 기준 |
 | [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md) | 이를 어떤 모듈·상태·데이터 계약으로 구현할 것인가? | 실제 코드/목표 구조의 차이 표기 |
 | [Backend Implementation Plan](../backend/IMPLEMENTATION_PLAN.md) | Backend를 어떤 의존 순서로 구현하며 지금 다음 작업은 무엇인가? | Phase 체크박스는 테스트 증거가 있을 때만 갱신 |
+| [Task API 계약](../backend/TASK_API.md) | Phase 5의 versioned API·세션·이벤트 버전·오류·신뢰 경계는 무엇인가? | 실제 OpenAPI/Backend·Frontend 타입과 함께 갱신 |
 | [scenarios/automatic-door.md](scenarios/automatic-door.md) | 버튼식 자동문에서 어떤 행동·예외·증거가 필요한가? | 대표 MVP의 행동 수준 규칙 |
 | [qa/frontend-manual-checklist.md](qa/frontend-manual-checklist.md) | 어떤 브라우저/접근성 동작을 어떻게 검증할 것인가? | 계획과 실제 실행 결과를 구분 |
 | [TEAM_WORKFLOW.md](TEAM_WORKFLOW.md) | 2인이 Git/작업 소유권/공유 API를 어떻게 협의할 것인가? | 현재 main-first 원칙 유지 |

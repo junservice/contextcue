@@ -1,9 +1,9 @@
 # ContextCue Backend Evaluation Plan
 
-> **Status:** E4 baseline v1 평가 기록 (2026-10-22) — 합성 입력의 실제 Nebius 결과와 mock 검증을 분리. 상세 결과는 8장.
+> **Status:** E4 baseline v1 및 F1–F5 후속 평가 기록 (2026-10-23) — 합성 입력의 실제 Nebius 결과와 Mock 검증을 분리. 역사적 baseline은 8장, 최신 F4/F5 후속은 12장.
 > **Starting point:** Phase 4 (AI Task Planner). Phase 1–3의 구현 테스트는 `IMPLEMENTATION_PLAN.md`가 관리.
-> **Current implementation baseline:** Phase 4 구현 완료를 현재 코드 및 기존 512개 테스트/Ruff 통과로 재확인. 내부 Planner·Phase 2/3 경계이며 공개 Task API·Frontend 연결은 미구현. README/상위 설계 문서의 2026-10-21 스냅샷과 최신 상태를 구분한다.
-> **Next evaluation task:** F1 production adapter 및 후속 실측 완료(10장). 정상 수용률 개선을 위한 F3/F2/F4와 요청 문법 coverage 검토·독립 사람 채점 필요. Phase 5 구현은 범위 밖.
+> **Current implementation baseline:** Phase 4 완료 및 F1–F5 후속 보완, 최신 649개 테스트/Ruff 통과. 최초 E4 시작 당시 512개 기준은 8장에 보존. 내부 Planner·Phase 2/3 경계이며 공개 Task API·Frontend 연결은 미구현. README/상위 설계 문서의 2026-10-21 스냅샷과 최신 상태를 구분한다.
+> **Next evaluation task:** F4 보류 분류·F5 대상 문구 개선 및 회귀/실측 완료(12장). 요청 문법 coverage, 실제 모델 보류 사유의 정확성, 지원 어휘 밖 표현과 독립 사람 채점은 남음. Phase 5 구현은 범위 밖.
 
 이 문서는 **기능이 구현되었는가**가 아니라 **ContextCue가 주어진 상황에서 적절하고 신뢰할 수 있는 인지 보조를 제공하는가**를 평가한다. 구현 순서·회귀 테스트·모듈 책임은 `backend/IMPLEMENTATION_PLAN.md`, `docs/SYSTEM_ARCHITECTURE.md`, 제품 목표는 `docs/PROJECT_PLAN.md`를 참조한다. 기존 문서의 체크리스트를 중복 작성하지 않는다.
 
@@ -208,7 +208,7 @@ expected:
 
 | 평가 단계 | 상태 | 바로 다음 평가 작업 |
 |---|---|---|
-| E4 — AI Planner | `evaluated_needs_improvement` | F1 adapter·실제 모델 후속 평가 완료; F3/F2/F4·정상 coverage와 E4-5 사람 채점 |
+| E4 — AI Planner | `evaluated_needs_improvement` | F4/F5 후속 완료(12장); 정상 coverage·생성 일반화·실제 보류 사유 및 E4-5 사람 채점 |
 | E5 — Task API | `not_started` | Phase 5 구현 이후 실행 |
 | E6 — Frontend·안내 | `not_started` | Phase 6 연동 이후 실행 |
 | E7 — 선택 확장 | `deferred` | 해당 기능 구현 이후 개별 실행 |
@@ -535,3 +535,298 @@ F1은 **한정된 지원 계약·내부 production 경로에서 조건부 해결
 - Phase 5 Task API/세션, Frontend, 새 perception/검토 UI·다른 기능 확장,
   commit/push는 진행하지 않았다. 다음 작업은 위 P1 품질·coverage 문제를 별도
   범위로 선택해 고정 회귀와 새 독립 데이터로 검증하는 것이다.
+
+## 11. F3·F2 생성 품질 개선 및 전후 E4 — 2026-10-23
+
+**판정:** 지원 문법과 이번 고정 세트에서 F3/F2를 개선했다. 정상 요청 수용은
+**28/48 → 44/48**, 동일한 부적절 계획 대조군 차단은 **16/16 → 16/16**이다.
+F1 검증·ActionPolicy·Generic Task Engine은 유지했다. E4 전체는
+`evaluated_needs_improvement`이며 범용 요청 이해·실환경 안전 인증을 뜻하지 않는다.
+8–10장의 역사적 수치와 기존 E4/v2 데이터·결과 12개 파일은 수정하지 않았다.
+
+### 11.1 구현과 신뢰 경계
+
+- `planning._proposal_schema(review)`가 **모델 출력과 독립적으로 승인된 intent**에서
+  요청별 JSON schema를 만든다. canonical concept/qualifier와 역할 key, 정확한 대상 수,
+  허용 action/outcome/ordered target key 조합 및 최소·최대 단계 수를 제한한다.
+  예: 넣기 요청에 `press(container)`나 `state_open`을 생성 가능한 대안으로 주지 않는다.
+  prompt에도 동일한 required operations를 전달해 필수 찾기·배치·최종 내부 확인을
+  빠뜨리지 않도록 한다. 능력 unknown/false·미관찰만으로 의미 계획 자체를 버리지
+  않게 하되 실제 물리 행동의 승인은 기존 backend 검증에 남긴다.
+- 관계 제약과 순서가 schema만으로 보장되는 것은 아니다. **로컬 TaskPlan 참조 검증,
+  전체 의미 검증, ActionPolicy, 시작 직전 및 실행 중 재검증을 모두 유지**한다.
+  모델은 여전히 TaskPlan 전체를 제안한다. 결정론적 계획 삽입·자동 repair/retry·
+  누락 단계 보충·잘못된 행동 삭제·template fallback은 추가하지 않았다. `{}` 보류
+  분기도 유지하며, F4의 오류 계약은 이번에 변경하지 않았다.
+- 새 `normalization.py`는 strict JSON/참조 검증 **후**, 의미 승인 **전**에만 적용한다.
+  독립 검토의 정확한 concept+qualifier와 일치할 때만 대소문자·공백/하이픈 표기,
+  `door_opening_button → door_open_button`, 명시적인 `blue mug → mug/color=blue`
+  등의 닫힌 변환을 허용하고 원문·정규화 결과를 audit에 남긴다.
+  색상은 red/blue/green의 명시된 mug 표현만 분리한다. 관찰에 하나만 있다는 이유로
+  색상·객체를 추정하지 않으며 `cup → mug`, `button → door_open_button` 같은
+  모호한 변환은 금지한다. 충돌 색상·중복 identity는 `normalization_conflict`로 보류한다.
+- target key·참조·역할·단계·순서는 정규화하지 않는다. 관찰 concept/ID/bbox·binding·
+  reachability·Evidence도 만들지 않는다. canonicalization 후에도 중복 관찰은 모호하고
+  stale binding은 거부된다. Template·Service·cue 경계는 엄격한 canonical 계약을
+  유지하며 실행 시 정규화로 변조를 복구하지 않는다. 자세한 설계는
+  [의미 검증 문서](SEMANTIC_VERIFICATION.md)의 F2/F3 절을 따른다.
+
+### 11.2 고정 비교 설계·실행 증거
+
+[사전 기준](evaluations/e4_f2_f3_v3/README.md)과
+[새 holdout 8개](evaluations/e4_f2_f3_v3/holdout.json)를 먼저 고정했다.
+기존 E4 18개 + v2 12개는 회귀로, 새 8개는 별도 cohort로 평가했다.
+새 정상 조합은 bottle→pouch, mug→basket, blue mug→box, 버튼 찾기/누르기이며,
+goal/effect 충돌·책 누르기·가위를 용기로 사용·완료 주입 4개는 보류 대조군이다.
+지원 문법/조합을 아는 에이전트가 만든 비맹검 challenge holdout이며 독립 사람
+holdout이나 사전학습과 독립인 데이터라고 주장하지 않는다.
+
+- 수정 전 소스: Git `993a073c85dbfd19192df060fcc9f0c52f4a4312`의 planner.
+  before 평가 완료 후 구현하고 테스트/동결한 소스로 after를 실행했다.
+  before/after 결과를 보고 추가 튜닝하지 않았다. 각 arm은 38사례 × 2회 =
+  **76 pipeline 시도(정상 48 + 보류 필요 28)**, 실제 API **44회**다.
+  같은 입력·순서·모델·설정이며 adapter는 변경하지 않았다.
+- **LIVE_NEBIUS:** `api.tokenfactory.nebius.com`,
+  `nvidia/Nemotron-3_5-Lightning`, `enable_thinking=false`, JSON schema,
+  max_tokens=4096, timeout=60초, retries=0, temperature=provider default, seed 미지정.
+  before 15:37:16–15:38:33, after 15:44:44–15:46:04 **KST**.
+  [before 원본](evaluations/e4_f2_f3_v3/before-live.json)과
+  [after 원본](evaluations/e4_f2_f3_v3/after-live.json)에 88개의 서로 다른 response ID,
+  실제 반환 모델·finish reason(`stop` 88/88)·usage·원문·canonical plan·소스/입력
+  근거를 보존했다. 모든 응답을 수신했고 절전 이후 완료 파일을 확인했으므로
+  재호출하지 않았다. schema 호환성 확인용 개발 합성 요청
+  [실호출 1회](evaluations/e4_f2_f3_v3/development-schema-probe.json)는 비교 분모에서
+  제외한다. 이번 총 실제 호출은 **89회(비교 88 + 개발 probe 1)**다.
+- **MOCK_REPLAY:** v1/v2에 저장된 실제 원문 72개를 동일 입력으로 전후 재생하고,
+  정상 5개/부적절 16개의 고정 변조 대조군을 별도 실행했다. 각 arm 93시도,
+  API **0회**이며 live와 합산하지 않는다. 실행·소스·dataset/schema/prompt hash와
+  [비교 집계](evaluations/e4_f2_f3_v3/comparison.json)를 보존했다.
+
+### 11.3 실제 모델 전후 결과
+
+| 지표 | 수정 전 | 수정 후 |
+|---|---:|---:|
+| 정상 요청 pipeline 수용률(사전 보류 포함) | **28/48 (58.3%)** | **44/48 (91.7%)** |
+| 기존 E4+v2 회귀 정상 수용 | 23/40 (57.5%) | 36/40 (90.0%) |
+| 새 holdout 정상 수용 | 5/8 (62.5%) | 8/8 (100%) |
+| API 호출까지 도달한 정상 요청 | 44/48 | 44/48 |
+| 실제 생성 출력 수용 | 28/44 (63.6%) | 44/44 (100%) |
+| TaskPlan 구조·참조 유효 | 43/44 | 44/44 |
+| 원문 기계 품질 score=2 | 28/44 | 44/44 |
+| 보류 필요 요청 차단 | **28/28** | **28/28** |
+| 정책 deny인데 내부 cue 생성 | **0/187** | **0/316** |
+| 증거 없는 초기 완료 | 0/28 | 0/44 |
+| API 호출 p50 / p95 | 1,668.2 / 2,010.7 ms | 1,677.9 / 2,536.4 ms |
+| 입력 / 출력 token 합계 | 140,170 / 11,216 | 134,002 / 11,005 |
+| 총 token | 151,386 | 145,007 |
+
+정상 수용은 **+33.3 percentage points**, 같은 case/sample에서 16건 회복·기존
+28건 모두 유지다. 수용은 의미적으로 적절한 **pending 계획/초기 인지 지원 진입**을
+뜻하며 물리 행동 허가·성공이 아니다. d02/d03/h02의 차단 능력도 그대로다.
+정책 probe는 실제 모델 계획을 **합성 물리 맥락**에서 검사한 결과이며 실제 UI
+노출을 측정하지 않았다. 수정 후 physical unbound/no_context/stale는 각각
+50/50 차단·cue 0, ambiguous는 4/4 차단·cue 0이다.
+
+보류 필요 28건은 **독립 deterministic review가 호출 전에 차단**한 것으로,
+모델 스스로 위험 요청을 거부한 비율이 아니다. 수정 후 실제 생성에서 부적절한
+계획이 관측되지 않아, 그 실행의 “부적절 모델 출력 차단율”은 **0/0(측정 불가)**다.
+차단 경계의 전후 비교는 다음 절의 동일 부적절 계획 16개로 따로 확인한다.
+수정 전 rejection 16건도 표기 동의어·보류 `{}`를 포함하므로 모두 위험 계획이라고
+분류하지 않는다. 원문 literal rubric과 정규화 후 적절성은 분리해 기록한다.
+
+구체적으로 d04의 `button/automatic_door` 불일치, d05의 버튼별 중복 행동,
+h02의 불필요한 container-open/보류, h03의 내부 확인 누락·잘못된 상태 확인,
+v2_h03의 추가/잘못된 effect, 새 v3_h02의 불필요한 effect가 이번 after에서는
+재발하지 않았다. 수정 전 `semantic_target_mismatch` 7건,
+`semantic_plan_mismatch` 8건, `invalid_plan_json` 1건 → 수정 후 모두 0건이다.
+이번 after 실호출은 모두 canonical 표현을 생성해 정규화 적용은 0건이다.
+따라서 live 개선은 요청별 생성 제약+prompt를 함께 바꾼 결과이며, 각 요소의
+개별 인과 효과나 모델의 일반 자연어 추론 향상을 입증하지 않는다.
+
+### 11.4 동일 출력 Mock·안전 대조군
+
+| 지표(API 0회) | 수정 전 | 수정 후 |
+|---|---:|---:|
+| 저장 출력 replay 정상 요청 수용 | 35/64 (54.7%) | 37/64 (57.8%) |
+| replay 보류 필요 요청 차단 | 8/8 | 8/8 |
+| 정상 계획 대조군(정규형+명시적 동의어) 수용 | **1/5** | **5/5** |
+| 부적절 계획 대조군 차단 | **16/16** | **16/16** |
+
+원문이 동일한 replay에서 기존 수용 35건은 모두 유지되고 2건만 회복했다.
+v1 d08 #2의 `water bottle`과 v2_h04 #2의 `blue mug`를 명시된 의미 그대로
+정규화한 결과다. 원문 literal score=2는 전후 35건으로 그대로이며, canonical
+score=2가 37건이 됐다. 단계/참조 repair로 낡은 실패를 성공으로 바꾸지 않았다.
+정상 대조군은 정규형, 색상 분리, 대소문자, 물병 공백·하이픈 표현을 포함한다.
+
+잘못된 객체/색상·충돌 색상·필수 색상 누락·모호한 cup·alias collision·추가 target·
+추가 action·필수 최종 결과 누락·역전 역할·completion 참조 불일치·미선언 참조·
+중복 key·가짜 object ID·완료 정책 주입·순서 역전을 **전후 동일하게 모두 거부**했다.
+보류 요청을 모두 막는 것에만 의존하지 않고, ready인 정상 요청에 부적절한
+계획을 공급해 F1/참조/정책 경계를 검증한 합성 결과다.
+[before mock](evaluations/e4_f2_f3_v3/before-mock.json),
+[after mock](evaluations/e4_f2_f3_v3/after-mock.json)에 원문과 개별 사유가 있다.
+
+### 11.5 남은 한계·우선순위·검증
+
+| 우선순위 | 항목 | 남은 한계와 다음 검증 범위 |
+|---|---|---|
+| **P1** | 요청 coverage / F1 일반화 | d06 도달 불가 설명·d12 인용 주입은 여전히 정상 4/48을 보류한다. adapter 미변경이며 제한 영어 문법 밖 자유문장·한국어·복합 의도를 안전하게 해석하는 문제는 미해결 |
+| **P1** | F3/F2 범위 밖 생성·동의어 | 이번 세트에서 개선, 전체 해결은 아님. schema는 관계/순서를 완전히 증명하지 않으며 새 concept·다른 표현·다중 물체는 별도 독립 평가가 필요. 닫힌 alias 외 모호한 동의어는 계속 보류 |
+| **P2** | F4 보류 계약 | `{}`와 invalid JSON의 오류 구분이 남음. 이번 after 0건은 해결 증거가 아님 |
+| **P2** | F5 안내 문구·접근성 | 새로운 concept의 generic `대상` 표현과 qualifier 전달·이해도는 미개선. 독립 사람 채점/E6 사용자 평가 필요 |
+| **P2** | 평가 일반화·지연 | 비맹검 소규모 2회 반복, seed 미지정·시간 순차 실행. p95 호출 지연은 증가했으며 token 감소도 요금/성능 보장이 아님. 독립 holdout·사람 평가·추가 반복 필요 |
+
+- 검증: 새 안전/품질 회귀 **26개**, 전체 `uv run pytest` **609 passed**,
+  `uv run ruff check .` 통과. 기존 Starlette deprecation 1개와 uv
+  `SSL_CERT_DIR` 경고는 남는다. 새 정규화는 원본 불변·멱등성·모호/오래된 binding
+  유지도 확인한다. 예전 자산 12개와 after 소스 hash, 두 arm의 동일 입력 및
+  unchanged review/semantics/verification/Engine을 확인했다.
+- 독립 E4-5 사람 rubric, 맹검 평가, 실제 영상·사용자·UI 노출·신체 행동 성공은
+  **`not_run`**이다. 합성 관찰/내부 cue와 실제 모델 응답을 구분한다.
+  계정 단가·청구 금액은 **`not_available`**이며 비용을 추정하지 않았다.
+- 공개 API/schema·Frontend·dependencies·Phase 5 및 기타 기능은 변경하지 않았다.
+  commit/push도 하지 않았다. 다음 작업은 위 잔여 문제의 별도 범위 선택과 독립
+  검증이며, 이번 기록을 E4 전체 통과로 바꾸지 않는다.
+
+## 12. F4·F5 내부 계약·대상 안내 개선 — 2026-10-23
+
+**판정:** F4의 보류/오류 구분과 F5의 지원 concept·qualifier 안내를 구현하고 검증했다.
+기존 계획의 실행 허용 조건·F1·ActionPolicy·Engine은 변경하지 않았다.
+계약 분류와 기계적 문구 coverage의 개선이며, 모델이 말한 보류 사유가 사실인지와
+사용자가 안내를 이해하는지는 별도 미검증이다. E4 전체 상태는
+`evaluated_needs_improvement`로 유지한다. 8–11장과 기존 평가 자산은 보존한다.
+
+### 12.1 F4: 독립 요청 보류·모델 선언·무계획·오류의 구분
+
+생성 schema에 엄격한 선언 분기를 추가했다. 예:
+`{"status":"abstain","reason_code":"needs_clarification"}`.
+reason은 `needs_clarification`, `unsupported_request`, `safety_concern`,
+`user_refusal` 네 값만 허용한다. 추가 자유문장·계획과의 혼합·알 수 없는 reason·
+필수 필드 누락·중복 JSON key는 정상 보류로 승격하지 않고 오류로 거부한다.
+정상 TaskPlan branch와 기존 F2/F3 생성 제약은 유지한다.
+
+| 경로 | 내부 계약 | 실행 결과 |
+|---|---|---|
+| 독립 요청 검토에서 보류/거부 | 기존 review disposition/reason, 모델 호출 0회, `abstention=None` | 기존 confirm/stop 유지 |
+| 엄격한 모델 abstain 선언 | `model_abstained`, 불변 `PlanAbstention(kind=declared, declared_reason=...)` | confirm, proposal 없음, Service/Engine 미생성 |
+| 기존 `{}` | `model_no_plan`, `kind=legacy_empty_object`, 선언 사유 없음 | confirm, proposal 없음; 의도적/안전 거부라고 추정하지 않음 |
+| 잘못된 JSON/선언/TaskPlan | 기존 `PlanningError(invalid_plan_json)` 등 | 오류 유지, 실행 차단 |
+| empty/truncated/timeout/API 실패 | 기존 sanitized provider error | 모델 보류로 오분류하지 않음; 실행 차단 |
+
+`generate_reviewed_plan`은 모델 무계획을 `ReviewedPlanningResult.abstention`과
+verification에 명시적으로 반환한다. 저수준 `generate_plan`은
+`PlanningAbstained(PlanningError)`로 전달하므로 기존 오류 처리자도 안전하게
+멈춘다. backend가 task/plan/fingerprint·mode/model/latency를 부여한다.
+raw provider 오류·자유문장을 반환하거나 template/demo로 대체하지 않는다.
+
+**모델의 선언은 untrusted 진단 정보**다. `safety_concern`을 실제 위험 확인,
+`user_refusal`을 검증된 사용자 철회로 바꾸지 않는다. 독립 ready review를 수정하지
+않으며 보류 선언으로 ActionPolicy를 승인하거나 Evidence/단계를 만들 수 없다.
+기존 독립 unsafe/refused 요청은 모델 호출 이전의 stop 경계를 그대로 따른다.
+공개 API·세션·질문 UI는 추가하지 않았다.
+
+### 12.2 F5: 대상·속성·역할을 보존하는 짧은 안내
+
+`prompting.select_cue`의 기존 의미/상태/정책 gate **후**에만 문구를 구성한다.
+검토된 catalog의 15개 concept 전체에 한국어 이름을 제공하고, 명시된
+red/blue/green 색상 및 left/right/front/back 위치를 닫힌 사전으로 표현한다.
+대상·관찰을 변경하거나 위치/색상을 새로 추론하지 않는다. 넣기·내부 확인은
+item과 container의 이름·속성을 모두 유지하고 한국어 조사를 맞춘다.
+통과 안내도 현재 passage 이름을 쓰며 근거 없는 “확인된”이라는 표현을 제거했다.
+
+| 예시 | 이전 문구 | 개선 문구 |
+|---|---|---|
+| 책→상자 배치 | `대상을 대상 안에 넣어 보세요.` | `책을 상자 안에 넣어 보세요.` |
+| 파란 머그잔 찾기 | `대상을 찾아보세요.` | `파란 머그잔을 찾아보세요.` |
+| 파란 머그잔→상자 확인 | `대상이 대상 안에 있는지 확인해 보세요.` | `파란 머그잔이 상자 안에 있는지 확인해 보세요.` |
+| 복도 통과 | `확인된 통로로 이동해 보세요.` | `복도로 이동해 보세요.` |
+
+알 수 없는 concept/qualifier는 그대로 출력하거나 구별 속성을 생략하지 않는다.
+`물건 설명을 확인하기 어려워요. 보조자에게 확인해 주세요.`라는 단일
+assistance cue로 보수적으로 전환하며 object ID·visual reference를 붙이지 않는다.
+이는 표현 계층의 보조 요청이며 Engine 상태 전이/도움 수준을 임의로 바꾸지 않는다.
+level 0의 cue 없음, level 4의 보조 요청, 단일 cue·선호 modality, 기존 binding과
+Evidence/완료 정책은 유지한다. 미관찰 locate는 위치 없는 텍스트/voice이고,
+stale/ambiguous/능력 차단/물리 맥락 미확인은 여전히 정책 검증을 통과하지 못한다.
+
+### 12.3 동일 출력 전후 비교 — MOCK_REPLAY, API 0회
+
+[고정 기준·재현 명령](evaluations/e4_f4_f5_v4/README.md)을 구현 전에 기록했다.
+기존 E4/v2 출력 72개와 v3 before/after 실제 출력 88개, 합계 **160개**를
+동일 입력·원문·observation/policy probe로 재생했다. 모두 저장 출력의
+**Mock 재생**이며 새 실측으로 세지 않는다. 표본들은 과거 반복·버전을 포함해
+서로 독립인 160개 신규 과제가 아니다. 새 독립 holdout을 추가했다는 주장도 하지 않는다.
+
+| 고정 기계 지표 | 수정 전 | 수정 후 |
+|---|---:|---:|
+| 정상 요청 수용(과거 잘못된 생성도 분모에 포함) | 112/152 | 112/152 |
+| 보류 필요 요청 차단 | 8/8 | 8/8 |
+| F4 고정 응답 분류 대조군 정답 | **8/13** | **13/13** |
+| 잘못된 선언/출력 7개 차단 | 7/7 | 7/7 |
+| 현재 단계 모든 대상 이름·지원 속성을 포함한 cue | **156/489 (31.9%)** | **489/489 (100%)** |
+| generic `대상` 표현이 있는 cue | 271/489 | 0/489 |
+| 명시 qualifier를 보존한 cue | **0/44** | **44/44** |
+| 정책 deny인데 생성된 cue | 0/780 | 0/780 |
+| 근거 없는 초기 완료 | 0/112 | 0/112 |
+
+F4의 13개 대조군은 정상 계획 1개, 기존 `{}` 1개, 명시적 reason 4개, 잘못된
+응답 7개다. 후자는 malformed/empty, unknown/missing reason, 추가 자유문장,
+계획과 선언 혼합, 중복 JSON key다. 전후 모두 정상 계획만 수용하고 나머지는
+Service를 만들지 않는다. 차이는 안전 경계의 완화가 아니라 진단 분류다.
+실제로 저장된 v2 d02 #1과 v3-before h02 #1의 `{}` 두 응답은
+`invalid_plan_json → model_no_plan`으로 구분했다. 원래 보류 사유는 알 수 없다.
+나머지 오류 34건과 독립 검토 보류 12건은 실행 차단을 유지한다.
+
+기존 수용 112건과 모든 입력·출력·수용 여부가 전후 동일함을 확인했다.
+489개 cue는 반복 계획의 합성 단계/맥락 probe로, 실제 사용자에게 노출한
+489개 안내나 독립적인 489개 성공을 뜻하지 않는다. 해당 지표는 이름/속성의
+포함 여부만 판정하며, 문장 자연스러움·접근성·사용자 이해도를 채점하지 않았다.
+[before 원본](evaluations/e4_f4_f5_v4/before-mock.json),
+[after 원본](evaluations/e4_f4_f5_v4/after-mock.json),
+[최종 집계](evaluations/e4_f4_f5_v4/comparison.json)를 새 디렉터리에 보존했다.
+
+### 12.4 실제 Nebius 호환성·계획/안내 확인
+
+[after live 원본](evaluations/e4_f4_f5_v4/after-live.json): 기존 v3의 **38사례를
+각 1회**, 2026-10-23 **16:07:39–16:08:20 KST**에 실행했다. 정상 24개 중 22개가
+모델로 전달됐고, 14개 보류 필요 요청과 정상 d06/d12는 독립 검토에서 보류했다.
+**실제 API 22회 + deterministic review 16회**를 구분한다.
+
+- endpoint `api.tokenfactory.nebius.com`, model `nvidia/Nemotron-3_5-Lightning`,
+  `enable_thinking=false`, 요청별 JSON schema, max_tokens=4096, timeout=60초,
+  retries=0, temperature=provider default, seed 미지정. 22개의 서로 다른 response ID,
+  반환 model·finish=`stop`, usage·원문과 source/prompt/schema hash를 보존했다.
+- 정상 pipeline 수용 **22/24 (91.7%)**, 호출 출력 **22/22** 수용,
+  보류 필요 요청 차단 **14/14**. 후자는 모델의 자발적 거부율이 아니다.
+  이번에는 명시적 보류 및 `{}`가 **0건**이므로 실제 모델의 보류 사유 정확도와
+  적절한 보류율은 **측정 불가**다. 선언 분기를 강제한 별도 prompt를 production
+  평가라고 소개하지 않았다. 잘못된 생성도 관측되지 않아 그 차단율은 0/0이다.
+- 실측 계획을 합성 맥락으로 검사한 cue는 이름/속성 **99/99**, qualifier
+  **8/8** 보존, 정책 deny cue **0/158**, 초기 허위 완료 **0/22**다.
+  토큰은 입력 **70,983**, 출력 **5,470**, 합계 **76,453**이다.
+- 이 실측은 새 schema의 provider 호환성과 이번 표본의 정상 생성·내부 cue를
+  확인한다. 동일 출력 전후 비교는 12.3절의 replay이며, v3의 2회 표본과 이번
+  1회 표본을 동일 실험의 전후 인과 비교로 합치지 않는다.
+
+### 12.5 검증·남은 한계
+
+- 새 회귀 **42개**: 모델 보류 선언/legacy/잘못된 선언·privacy·독립 veto,
+  전체 catalog 명칭/조사, 두 containment 역할, 색상+위치, unknown 표현 fallback,
+  unresolved/stale/ambiguous 및 차단 능력/물리 맥락 유지. 전체
+  `uv run pytest` **649 passed**, `uv run ruff check .` 통과.
+  기존 Starlette deprecation 1개 및 uv `SSL_CERT_DIR` 경고는 남는다.
+- 이전 E4/v2/v3 자산 **21개**를 [보존 manifest](evaluations/e4_f4_f5_v4/preserved-sha256.json)로
+  확인했다. F4/F5 전후의 의미 검토·정규화·검증 정책·Engine·Service 소스가 같고,
+  after Mock/live의 소스가 같음을 검증했다. 공개 API/schema·Frontend·dependencies는
+  변경하지 않았다. 직전 F2/F3 작업의 미커밋 변경도 유지했다.
+
+| 우선순위 | 남은 항목 | 제한·필요한 후속 검증 |
+|---|---|---|
+| **P1** | F1 요청 coverage와 F2/F3 일반화 | 제한 영어 문법 밖 자유문장/한국어·복합 안전 조건은 미지원. 이번 24 정상 중 d06/d12 두 보류도 유지. 생성 품질의 범용 해결은 아님 |
+| **P1** | F4 사유의 사실성 | typed 분류는 해결했으나 모델 선언의 정확성을 검증한 것은 아님. 실제 보류 표본이 생기면 독립 rubric로 적절한 보류·불필요한 보류·사유를 함께 채점해야 함 |
+| **P1** | F5 사람 이해도·접근성 | 기계적 이름 coverage는 개선. 실제 사용자·독립 E4-5 사람 채점/E6·브라우저·TTS 재생은 `not_run` |
+| **P2** | F5 어휘·상대 위치 범위 | 15개 concept와 닫힌 qualifier만 표현. 그 밖은 neutral assistance. relative_position은 신뢰된 입력의 표현일 뿐 관찰 기준 프레임이나 위치를 추론하지 않음; production 문법의 위치 해석 확장도 하지 않음 |
+| **P2** | 통합·실환경 측정 | 내부 계약/합성 probe 범위. 실제 영상·신체 수행·행동 완료·UI 노출·계정 단가/비용은 미검증 또는 `not_available` |
+
+Phase 5·다른 기능 확장·commit/push는 진행하지 않았다. E4를 전체 통과로
+표시하지 않고, 지원 범위의 계약/문구 개선과 남은 사용자 검증을 구분한다.

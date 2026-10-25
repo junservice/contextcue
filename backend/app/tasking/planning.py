@@ -22,6 +22,7 @@ from pydantic import ConfigDict, Field, ValidationError
 
 from ..planner import BASE_URL, MODEL
 from .models import CapabilityFacts, ObservationSnapshot, TaskModel, TaskPlan, Text
+from .normalization import NormalizationChange, NormalizationError, normalize_proposal
 from .prompting import Guidance
 from .request_review import ControlledRequestReviewer
 from .semantics import (
@@ -59,6 +60,39 @@ class PlanningRequest(TaskModel):
     observations: ObservationSnapshot
 
 
+class _AbstentionPayload(TaskModel):
+    """Untrusted model declaration, never a semantic review or safety finding."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    status: Literal["abstain"]
+    reason_code: Literal[
+        "needs_clarification", "unsupported_request", "safety_concern", "user_refusal"
+    ]
+
+
+@dataclass(frozen=True)
+class PlanAbstention:
+    task_id: str
+    plan_id: str
+    request_fingerprint: str
+    kind: Literal["declared", "legacy_empty_object"]
+    declared_reason: (
+        Literal["needs_clarification", "unsupported_request", "safety_concern", "user_refusal"]
+        | None
+    )
+    mode: Literal["MOCK_PROVIDER", "LIVE_NEBIUS"]
+    model_id: str | None
+    latency_ms: float
+
+
+class PlanningAbstained(PlanningError):
+    """Low-level no-plan signal; callers catching PlanningError still fail closed."""
+
+    def __init__(self, abstention: PlanAbstention):
+        self.abstention = abstention
+        super().__init__("model_abstained" if abstention.kind == "declared" else "model_no_plan")
+
+
 class PlanProvider(Protocol):
     mode: Literal["MOCK_PROVIDER", "LIVE_NEBIUS"]
     model_id: str | None
@@ -79,6 +113,7 @@ class PlanProposal:
     template_id: str | None = None
     template_version: str | None = None
     request_fingerprint: str | None = None
+    normalizations: tuple[NormalizationChange, ...] = ()
 
 
 class ReviewedTemplate(TaskModel):
@@ -101,6 +136,7 @@ class ReviewedPlanningResult:
     review: SemanticReview
     verification: VerificationResult
     proposal: PlanProposal | None = None
+    abstention: PlanAbstention | None = None
 
 
 async def generate_reviewed_plan(
@@ -108,23 +144,34 @@ async def generate_reviewed_plan(
 ) -> ReviewedPlanningResult:
     """Production admission: interpret the original request, then call the provider.
 
-    Holds are explicit and make zero model calls. Provider/schema/plan failures
-    remain PlanningError; no demo/template fallback or implicit repair is used.
+    Independent review holds make zero model calls. Model no-plan responses are
+    explicit confirmation results; provider/schema/plan failures remain errors.
+    No demo/template fallback or implicit repair is used.
     """
     request = PlanningRequest.model_validate(request.model_dump())
     review = ControlledRequestReviewer().review(request)
     check = verify_review(
-        review, task_id=request.task_id, plan_id=request.plan_id, goal=request.goal,
+        review,
+        task_id=request.task_id,
+        plan_id=request.plan_id,
+        goal=request.goal,
         fingerprint=request_fingerprint(request),
     )
     verification = VerificationResult(check.decision, check.reason_code)
     if check.decision != "allow":
         return ReviewedPlanningResult(review, verification)
-    proposal = await generate_plan(request, provider, semantic_review=review)
+    try:
+        proposal = await generate_plan(request, provider, semantic_review=review)
+    except PlanningAbstained as error:
+        # Model reasons are diagnostics only: never rewrite independent review,
+        # authorize an action, claim a verified hazard/refusal, or create a task.
+        return ReviewedPlanningResult(
+            review, VerificationResult("confirm", error.reason_code), abstention=error.abstention
+        )
     return ReviewedPlanningResult(review, proposal.initial_verification, proposal)
 
 
-def _proposal_schema() -> dict:
+def _proposal_schema(semantic_review: SemanticReview | None = None) -> dict:
     """Describe trusted action/outcome/cardinality rules at generation time, too."""
     schema = TaskPlan.model_json_schema()
     step_schema = schema["$defs"]["TaskStep"]
@@ -140,19 +187,66 @@ def _proposal_schema() -> dict:
             completion["properties"]["target_keys"].update(minItems=count, maxItems=count)
             variant["properties"]["completion_goal"] = completion
             variants.append(variant)
+    if semantic_review is not None:
+        intent = semantic_review.intent
+        target_schema = schema["$defs"]["TargetRef"]
+        targets = []
+        for target in intent.targets:
+            variant = deepcopy(target_schema)
+            variant["properties"]["target_key"]["enum"] = [target.role]
+            variant["properties"]["concept"]["enum"] = [target.concept]
+            variant["properties"]["qualifiers"]["enum"] = [dict(target.qualifiers)]
+            variant["required"] = ["target_key", "concept", "qualifiers"]
+            targets.append(variant)
+        schema["$defs"]["TargetRef"] = {"oneOf": targets}
+        schema["properties"]["targets"].update(
+            minItems=len(intent.targets), maxItems=len(intent.targets), uniqueItems=True
+        )
+        schema["properties"]["plan_id"]["enum"] = [semantic_review.plan_id]
+        schema["properties"]["goal"]["enum"] = [semantic_review.goal]
+        operations = [(op.action, op.outcome, list(op.roles)) for op in intent.operations]
+        located = {roles[0] for action, _, roles in operations if action == "locate"}
+        operations += [
+            ("locate", "target_located", [t.role]) for t in intent.targets if t.role not in located
+        ]
+        variants = []
+        for action, outcome, keys in operations:
+            variant = deepcopy(step_schema)
+            variant["properties"]["action"]["enum"] = [action]
+            variant["properties"]["target_keys"].update(
+                enum=[keys], minItems=len(keys), maxItems=len(keys)
+            )
+            completion = deepcopy(goal_schema)
+            completion["properties"]["outcome"]["enum"] = [outcome]
+            completion["properties"]["target_keys"].update(
+                enum=[keys], minItems=len(keys), maxItems=len(keys)
+            )
+            variant["properties"]["completion_goal"] = completion
+            variants.append(variant)
+        schema["properties"]["steps"].update(
+            minItems=len(intent.operations),
+            maxItems=len(intent.targets) + sum(op.action != "locate" for op in intent.operations),
+        )
     schema["$defs"]["TaskStep"] = {"oneOf": variants}
-    schema["properties"]["steps"]["maxItems"] = 32
-    schema["properties"]["targets"]["maxItems"] = 32
-    # A refusal/ambiguous request must be able to produce {}, even under constrained decoding.
-    # It is rejected by local TaskPlan validation and can never enter the Engine.
+    if semantic_review is None:
+        schema["properties"]["steps"]["maxItems"] = 32
+        schema["properties"]["targets"]["maxItems"] = 32
+    # Explicit abstention is distinct from malformed output. Keep legacy {} as
+    # unspecified no-plan, without inferring intentional refusal or its cause.
     definitions = schema.pop("$defs")
     return {
         "$defs": definitions,
-        "anyOf": [schema, {"type": "object", "properties": {}, "additionalProperties": False}],
+        "anyOf": [
+            schema,
+            _AbstentionPayload.model_json_schema(),
+            {"type": "object", "properties": {}, "additionalProperties": False},
+        ],
     }
 
 
-def _messages(request: PlanningRequest) -> list[dict[str, str]]:
+def _messages(
+    request: PlanningRequest, semantic_review: SemanticReview | None = None, *, schema=None
+) -> list[dict[str, str]]:
     vocabulary = [
         {
             "action": policy.action,
@@ -180,15 +274,46 @@ def _messages(request: PlanningRequest) -> list[dict[str, str]]:
         "thresholds, allowed sources, or completion policies. Never assume arm extension proves "
         "reachability or accurate pressing. Do not add a complete pseudo-step. "
         "If intent/addressee is ambiguous, the user refuses, or no safe plan can be proposed, "
-        "return {} so the caller requests confirmation rather than inventing a plan. "
+        'return {"status":"abstain","reason_code":"needs_clarification"} instead of a plan. '
+        "Use only needs_clarification, unsupported_request, safety_concern or user_refusal "
+        "as the declared reason. Do not mix abstention and plan fields or add explanation text. "
+        "This is an untrusted declaration; the backend owns confirmation and safety decisions. "
         "Missing bindings or unknown reachability alone do not prevent a semantic proposal: "
         "locate is allowed and later physical steps remain pending backend verification. "
         "A proposed physical step is never an instruction or proof of feasibility/success. "
         "Only use this trusted action vocabulary: "
         + json.dumps(vocabulary)
         + ". Match this output schema: "
-        + json.dumps(_proposal_schema())
+        + json.dumps(schema if schema is not None else _proposal_schema(semantic_review))
     )
+    if semantic_review is not None:
+        contract = {
+            "targets": [
+                {"target_key": t.role, "concept": t.concept, "qualifiers": dict(t.qualifiers)}
+                for t in semantic_review.intent.targets
+            ],
+            "required_operations": [
+                {
+                    "action": op.action,
+                    "target_keys": list(op.roles),
+                    "completion_goal": {"outcome": op.outcome, "target_keys": list(op.roles)},
+                }
+                for op in semantic_review.intent.operations
+            ],
+        }
+        instructions += (
+            " The following contract was independently interpreted by trusted backend code. "
+            "Use its canonical target_key/concept/qualifiers exactly, including unresolved targets. "
+            "Include every required locate before using its target. Include every non-locate "
+            "operation exactly once in the listed order; do not replace a required outcome. "
+            "Only optional locate steps for another declared target may be added, at most once. "
+            "Never add press(container/item), container-open checks, extra targets or extra effects. "
+            "False/unknown motor ability or missing observation alone is not a refusal: propose "
+            "the semantic locate and pending physical sequence; backend verification owns "
+            "feasibility/assistance. Do not claim the action is permitted or completed. "
+            "Do not omit the final inside/open verification. Contract: "
+            + json.dumps(contract, ensure_ascii=False)
+        )
     return [
         {"role": "system", "content": instructions},
         {
@@ -235,7 +360,10 @@ def _validate_plan(
 
 def _require_review(request: PlanningRequest, review: SemanticReview | None) -> None:
     result = verify_review(
-        review, task_id=request.task_id, plan_id=request.plan_id, goal=request.goal,
+        review,
+        task_id=request.task_id,
+        plan_id=request.plan_id,
+        goal=request.goal,
         fingerprint=request_fingerprint(request),
     )
     if result.decision != "allow":
@@ -257,9 +385,10 @@ async def generate_plan(
         raise PlanningError("invalid_provider_mode")
     _require_review(request, semantic_review)
     started = perf_counter()
+    schema = _proposal_schema(semantic_review)
     try:
         raw = await asyncio.wait_for(
-            provider.complete(_messages(request), _proposal_schema()),
+            provider.complete(_messages(request, semantic_review, schema=schema), schema),
             timeout=timeout_seconds,
         )
     except TimeoutError:
@@ -274,9 +403,34 @@ async def generate_plan(
         raise PlanningError("response_too_large")
     try:
         data = json.loads(raw, object_pairs_hook=_unique_object, parse_constant=_reject_constant)
+        declared = (
+            _AbstentionPayload.model_validate(data)
+            if isinstance(data, dict) and "status" in data
+            else None
+        )
+    except (ValueError, TypeError, RecursionError):
+        raise PlanningError("invalid_plan_json") from None
+    if data == {} or declared is not None:
+        raise PlanningAbstained(
+            PlanAbstention(
+                task_id=request.task_id,
+                plan_id=request.plan_id,
+                request_fingerprint=request_fingerprint(request),
+                kind="declared" if declared else "legacy_empty_object",
+                declared_reason=declared.reason_code if declared else None,
+                mode=provider.mode,
+                model_id=provider.model_id,
+                latency_ms=round((perf_counter() - started) * 1000, 1),
+            )
+        )
+    try:
         plan = TaskPlan.model_validate(data)
     except (ValueError, TypeError, RecursionError):
         raise PlanningError("invalid_plan_json") from None
+    try:
+        plan, normalizations = normalize_proposal(plan, semantic_review)
+    except NormalizationError as error:
+        raise PlanningError(str(error)) from None
     check = _validate_plan(plan, request, semantic_review)
     return PlanProposal(
         plan,
@@ -288,6 +442,7 @@ async def generate_plan(
         model_id=provider.model_id,
         latency_ms=round((perf_counter() - started) * 1000, 1),
         request_fingerprint=request_fingerprint(request),
+        normalizations=normalizations,
     )
 
 
@@ -347,8 +502,11 @@ def start_planned_task(
     if semantic_review is None:
         semantic_review = context.semantic_review
     semantic = verify_review(
-        semantic_review, task_id=context.task_id, plan_id=context.plan_id,
-        goal=proposal.requested_goal, fingerprint=proposal.request_fingerprint,
+        semantic_review,
+        task_id=context.task_id,
+        plan_id=context.plan_id,
+        goal=proposal.requested_goal,
+        fingerprint=proposal.request_fingerprint,
     )
     if semantic.decision == "allow":
         semantic = verify_plan_semantics(plan, semantic_review)

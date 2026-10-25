@@ -30,6 +30,15 @@ For coding agents, see [AGENTS.md](AGENTS.md) and the backend/frontend scoped in
 
 The **automatic door** is the primary target end-to-end scenario. The packing-bag demo remains a **separate frontend-only UI/state-machine example**, not an AI/backend-connected task.
 
+**2026-10-23 local backend update:** Phase 5 adds a versioned Task lifecycle API
+(`POST /api/v1/tasks`, task lookup and events), in-memory sessions and event
+version/deduplication checks on top of the existing verified Task Engine. See the
+[Task API contract](backend/TASK_API.md) and [implementation plan](backend/IMPLEMENTATION_PLAN.md).
+The default adapter has no observed objects or completion receipts. Frontend UI,
+authenticated observation/Evidence adapters and multi-worker persistence remain
+unimplemented. Phase 5 verification used mocks and synthetic backend evidence;
+it made no new live model calls. The table above remains the earlier main snapshot.
+
 ## Run locally (Windows PowerShell)
 
 Prerequisites: Git, Node.js 24 LTS, Python 3.12 and [uv](https://docs.astral.sh/uv/).

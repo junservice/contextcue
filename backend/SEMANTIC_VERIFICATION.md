@@ -4,7 +4,7 @@
 기존 Engine, TaskPlan 모델, Action Policy 레지스트리와 공개 API는 유지한다.
 후속으로 `request_review.py`의 제한된 영어 요청 문법 adapter와
 `planning.generate_reviewed_plan`을 실제 Nebius 경로에 연결했다. 최신 실측은
-`EVALUATION_PLAN.md` 10장과 이 문서 마지막 절을 따른다.
+`EVALUATION_PLAN.md` 12장과 이 문서 마지막 절을 따른다.
 
 ## 신뢰의 출처
 
@@ -146,3 +146,60 @@ commit/push는 수행하지 않았다.
 - F1의 기존 실행 우회와 지원 문법 경계는 구현·검증했지만, 정상 계획 유용성과
   범용 자연어 지원까지 해결한 것은 아니다. E4는 `evaluated_needs_improvement`로
   유지한다. 공개 Task API/세션·다른 Phase·commit/push는 진행하지 않았다.
+
+## F2/F3 — 요청별 생성 제약과 안전한 표기 정규화 (2026-10-23)
+
+기존 독립 검토·전체 의미 검증의 승인 조건은 유지한다. 모델의 제안에서 정답을
+만들거나 평가 expected label을 production 코드로 읽지 않는다.
+
+1. `generate_plan`은 현재 요청의 독립 review를 검사한 뒤 intent에서 요청별
+   JSON schema와 prompt 계약을 만든다. canonical concept/qualifier·역할 key,
+   허용 action/outcome/ordered target keys, 대상/단계 수를 제한한다. 최소한의
+   locate와 모든 필수 결과를 요구하고 추가 physical effect는 허용하지 않는다.
+   `{}` 응답 분기는 유지한다. 단계 순서·대상 참조 무결성의 최종 보장은 계속
+   로컬 검증의 책임이다.
+2. provider가 반환한 strict JSON을 `TaskPlan`으로 검증한다. 미선언/중복 참조,
+   모델이 만든 ID·좌표·완료 정책은 이 단계에서 거부하며 복구하지 않는다.
+3. `normalization.normalize_proposal`은 복사본의 concept/qualifier 표기만 바꾼다.
+   변환 후 identity가 독립 intent의 정확한 identity인 경우만 허용한다.
+   casefold·공백/하이픈→underscore, 닫힌 `door_opening_button` alias,
+   명시적인 red/blue/green mug의 색상 분리만 지원한다. 생략 색상 추정,
+   `cup→mug`, 일반 `button→door_open_button`은 허용하지 않는다.
+   상충 색상·정규화 후 중복 identity는 `normalization_conflict`로 보류한다.
+4. 변경 전후 concept/qualifier를 불변 `PlanProposal.normalizations`로 기록하고,
+   기존 `_validate_plan`의 ActionPolicy vocabulary·역할·전체 의미 검증을 적용한다.
+   시작/Service/cue에서도 기존 strict 검증을 반복한다. 이후 계획 변조를 정규화로
+   복구하지 않으며 Template에도 이 정규화를 자동 적용하지 않는다.
+
+정규화는 target key·참조·step·action·outcome·순서·review를 바꾸지 않는다.
+관찰을 변환하거나 관찰 개수를 근거로 identity를 추측하지 않는다. 누락/모호한
+객체는 locate를 제안할 수 있어도 physical step에서 binding 확인이 필요하며,
+색상 alias를 허용한 뒤에도 중복 관찰·stale binding은 계속 차단한다.
+차단/unknown 능력과 실제 reachability 역시 독립적인 ActionPolicy의 책임이다.
+
+실측 전후 정상 **28/48→44/48**, 보류 요청 **28/28 차단 유지**다. 후자는
+독립 review 결과이며 모델의 위험 거부율이 아니다. 동일 원문 Mock replay는
+유효한 alias 2건만 회복했고, 별도 정상 대조군 **1/5→5/5**·부적절 계획
+**16/16 차단 유지**를 확인했다. 새 회귀 26개를 포함해 pytest **609 passed**,
+Ruff 통과. 자료·분모·범위/지연 한계는 `EVALUATION_PLAN.md` 11장 참조.
+이 변화는 F1의 자유문장 coverage·F4/F5·Phase 5를 확장하지 않는다.
+
+## F4/F5 — 보류 진단·대상 표현의 후속 경계 (2026-10-23)
+
+- 모델은 TaskPlan 대신 닫힌 `status=abstain`/reason_code 객체를 선언할 수 있다.
+  이 분기는 strict JSON·추가 필드/중복 key 검사 후에만 인정하고, backend scope와
+  provenance를 담은 불변 `PlanAbstention`으로 구분한다. 모델 선언은 독립 review나
+  관찰 사실이 아니며 `safety_concern`/`user_refusal`로 trusted 판정을 덮어쓰지 않는다.
+  결과는 confirm/no-proposal이며 Service/Engine을 생성하지 않는다.
+- legacy `{}`는 `model_no_plan`으로 구분하지만 사유/의도는 알 수 없다. 잘못된
+  선언·JSON·참조와 transport 실패는 계속 오류다. 독립 unsafe/refused 요청은
+  호출 전 stop을 유지한다. 저수준 `PlanningAbstained`는 `PlanningError`의 하위
+  타입이므로 기존 fail-closed 처리도 유지한다.
+- Prompting은 의미·정책 gate 후에만 닫힌 한국어 concept/qualifier 사전을 사용한다.
+  알려진 이름·속성을 안내하고, 모르는 설명은 raw 모델 문자열을 출력하거나
+  속성을 생략하지 않고 neutral assistance cue로 전환한다. 이 표현 fallback은
+  행동 승인·관찰/binding·Evidence·완료·Engine 상태를 만들지 않는다.
+- 실제 모델은 선언을 통해 스스로 계획을 보류할 수 있지만 실행 승인이나
+  정책 완화는 할 수 없다. 이번 typed 응답 계약과 안내 수정은 기존 F1의
+  지원 문법 coverage나 공개 API를 확장하지 않는다. 회귀/실측의 정확한 분모와
+  남은 사유 정확성·사용자 이해도 검증은 `EVALUATION_PLAN.md` 12장 참조.

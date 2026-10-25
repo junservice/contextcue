@@ -1,0 +1,14 @@
+{
+  "evaluations\\e4\\agent-review.json": "aad4263461d7a82a8f8980837e8c4301c37b1c2b4e355b154fb5ca0167c4a232",
+  "evaluations\\e4\\cases.json": "f94c8e71fc8a44776b4a45cf2a9f1a9d89f47d4f25cfc370ca06572c41f82551",
+  "evaluations\\e4\\IMPLEMENTATION_FINDINGS.md": "30247bfbc4431a35713a8332c54fad5eaa947163d5dcfea311bf7da6bbf23cd8",
+  "evaluations\\e4\\live-results.json": "b903a11f02c897d0c22b7906dfb2c5fa365d40a3ed399930df7778af49182402",
+  "evaluations\\e4\\mock-results.json": "3a1afb94e4de5bd544ad67d86a4cae8d0bf342715c5703f7aa7649841d7a8001",
+  "evaluations\\e4\\README.md": "b81a085f2bbdb247348d96cd25f645e6384b2b280ac66747c1efc573ae944db5",
+  "evaluations\\e4\\summary.json": "4c018e8c3628fe1d5b1e6091fe625aca7bd819007855689106778af27aa44ad3",
+  "evaluations\\e4_f1_v2\\holdout.json": "ed7faaad825093f792ace4211b58507735a72834e69146cfde7603d34d9a6505",
+  "evaluations\\e4_f1_v2\\live-results.json": "53519488ff1ace224f0deea3c742dff7b74683300b467a9d8e971814bf8869ca",
+  "evaluations\\e4_f1_v2\\mock-results.json": "235688943ff7d8278b188d3f98358db7c511336b00528e5a00519c3f3be634b1",
+  "evaluations\\e4_f1_v2\\preserved-e4-sha256.json": "c5f1370d41b90d166695267421e85123eec63608d69ee6ef2acfeecc90c45b2f",
+  "evaluations\\e4_f1_v2\\README.md": "4f71ec9e82eb6ce21c81c53b1192d4656d7581727ffe9e64b8c025778808ca39"
+}

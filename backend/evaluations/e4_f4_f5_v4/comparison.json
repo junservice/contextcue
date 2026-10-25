@@ -1,0 +1,125 @@
+{
+  "evaluation_id": "e4-f4-f5-v4-comparison",
+  "evidence_files_sha256": {
+    "after-live.json": "1282be3ea6d9ab8c0f53d94509e2b75c7d47a2c7ca8e3978dfcf3def58fecc13",
+    "after-mock.json": "689cb81ec593a33c28c85f9b7c16f51c5bc6faac034b718d96c23a8b72c0b58a",
+    "before-mock.json": "de89f66a7c8bab9ba17f8147deb9ee90b8c4e432786af6ddf8dd429d8f6c61de",
+    "preserved-sha256.json": "b9ee685e9b4aa5d7a4d153e0a63fcf2ef8339836816a4082b4ef4d50270d0526"
+  },
+  "paired_mock": {
+    "before": {
+      "pipeline_attempts": 160,
+      "api_calls": 0,
+      "classes": {
+        "accepted_plan": 112,
+        "error": 36,
+        "independent_review_hold": 12
+      },
+      "normal_admission": {
+        "accepted": 112,
+        "total": 152
+      },
+      "required_holds": {
+        "blocked": 8,
+        "total": 8
+      },
+      "cue_rubric": {
+        "allowed_cues": 489,
+        "all_target_names_and_qualifiers_present": 156,
+        "generic_target_text": 271,
+        "denied_probes": 780,
+        "cue_despite_deny": 0,
+        "qualified_cues": 44,
+        "qualifiers_preserved": 0
+      },
+      "control_classifications_correct": 8,
+      "controls_total": 13,
+      "initial_false_completion": 0,
+      "human_rating": "not_run",
+      "ui_exposure": "not_run"
+    },
+    "after": {
+      "pipeline_attempts": 160,
+      "api_calls": 0,
+      "classes": {
+        "accepted_plan": 112,
+        "error": 34,
+        "independent_review_hold": 12,
+        "unspecified_no_plan": 2
+      },
+      "normal_admission": {
+        "accepted": 112,
+        "total": 152
+      },
+      "required_holds": {
+        "blocked": 8,
+        "total": 8
+      },
+      "cue_rubric": {
+        "allowed_cues": 489,
+        "all_target_names_and_qualifiers_present": 489,
+        "generic_target_text": 0,
+        "denied_probes": 780,
+        "cue_despite_deny": 0,
+        "qualified_cues": 44,
+        "qualifiers_preserved": 44
+      },
+      "control_classifications_correct": 13,
+      "controls_total": 13,
+      "initial_false_completion": 0,
+      "human_rating": "not_run",
+      "ui_exposure": "not_run"
+    },
+    "identical_inputs_raw_outputs_acceptance": true,
+    "all_prior_accepted_plans_retained": 112
+  },
+  "live": {
+    "pipeline_attempts": 38,
+    "api_calls": 22,
+    "classes": {
+      "accepted_plan": 22,
+      "independent_review_hold": 16
+    },
+    "normal_admission": {
+      "accepted": 22,
+      "total": 24
+    },
+    "required_holds": {
+      "blocked": 14,
+      "total": 14
+    },
+    "cue_rubric": {
+      "allowed_cues": 99,
+      "all_target_names_and_qualifiers_present": 99,
+      "generic_target_text": 0,
+      "denied_probes": 158,
+      "cue_despite_deny": 0,
+      "qualified_cues": 8,
+      "qualifiers_preserved": 8
+    },
+    "control_classifications_correct": 0,
+    "controls_total": 0,
+    "initial_false_completion": 0,
+    "human_rating": "not_run",
+    "ui_exposure": "not_run",
+    "usage": {
+      "prompt_tokens": 70983,
+      "completion_tokens": 5470,
+      "total_tokens": 76453
+    },
+    "started_at_utc": "2026-10-23T07:07:39.373035+00:00",
+    "finished_at_utc": "2026-10-23T07:08:20.201691+00:00",
+    "declared_abstention_observed": 0,
+    "distinct_responses": 22
+  },
+  "historical_files_preserved": 21,
+  "unchanged_semantic_policy_engine_sources": true,
+  "limitations": [
+    "Mechanical wording coverage is not human comprehension.",
+    "Legacy empty-object intent cannot be recovered.",
+    "Model reason is an untrusted declaration.",
+    "No live declared abstention observed.",
+    "Two normal requests remain held by bounded grammar.",
+    "No UI, camera, TTS playback or physical success evaluation."
+  ]
+}

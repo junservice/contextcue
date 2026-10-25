@@ -1,0 +1,567 @@
+{
+  "evaluation_id": "e4-f2-f3-v3-comparison",
+  "evidence_files_sha256": {
+    "after-live.json": "e6d7123a3fd428daa6473bb8cfb3df684e25328551840224f43425e41cd1dd9a",
+    "after-mock.json": "f22d7af4c2f62b7bb85b75a77c813d45c2e830dc2f0c3f70319ffd1c1bb08934",
+    "before-live.json": "361286bd5cd2a172cfa5f1d49ca3343d3484c53e9120bc4273f9c4dd1e95c6d3",
+    "before-mock.json": "1f44a92ed981fe32295159cb4032baaf8898804c8b0bb8b67f1b8a0765e925ba",
+    "development-schema-probe.json": "880c756803a1bc0959060ac044d0bc2c8054ec78a2709e460efdcbeb2645b393",
+    "holdout.json": "db17223a89d84717a9f9d2f9f26f78da490f0236dfddfd0b18d1ec968068d157",
+    "preserved-sha256.json": "419b2e82de3dbf1267e98375503903e36e0af0392304fe8f13e8b7fdd8ea8062"
+  },
+  "live": {
+    "before": {
+      "pipeline_attempts": 76,
+      "api_attempts": 44,
+      "normal_pipeline_acceptance": {
+        "numerator": 28,
+        "denominator": 48,
+        "rate": 0.5833
+      },
+      "normal_adapter_coverage": {
+        "numerator": 44,
+        "denominator": 48,
+        "rate": 0.9167
+      },
+      "invalid_request_blocking": {
+        "numerator": 28,
+        "denominator": 28,
+        "rate": 1.0
+      },
+      "invalid_request_adapter_veto": {
+        "numerator": 28,
+        "denominator": 28,
+        "rate": 1.0
+      },
+      "plan_schema_validity": {
+        "numerator": 43,
+        "denominator": 44,
+        "rate": 0.9773
+      },
+      "model_output_admission": {
+        "numerator": 28,
+        "denominator": 44,
+        "rate": 0.6364
+      },
+      "mechanical_appropriate_actual_outputs": {
+        "numerator": 28,
+        "denominator": 44,
+        "rate": 0.6364
+      },
+      "normal_end_to_end_mechanical_pass": {
+        "numerator": 28,
+        "denominator": 48,
+        "rate": 0.5833
+      },
+      "inappropriate_admitted": 0,
+      "internal_cue_despite_policy_denial": {
+        "numerator": 0,
+        "denominator": 187,
+        "rate": 0.0
+      },
+      "initial_false_completion": {
+        "numerator": 0,
+        "denominator": 28,
+        "rate": 0.0
+      },
+      "token_usage": {
+        "prompt_tokens": 140170,
+        "completion_tokens": 11216,
+        "total_tokens": 151386
+      },
+      "usage_coverage": {
+        "numerator": 44,
+        "denominator": 44,
+        "rate": 1.0
+      },
+      "per_call_latency_ms": {
+        "n": 44,
+        "p50": 1668.2,
+        "p95": 2010.7
+      },
+      "pipeline_latency_ms": {
+        "n": 76,
+        "p50": 1219.7,
+        "p95": 1983.3
+      },
+      "human_review": "not_run",
+      "actual_ui_exposure": "not_run",
+      "cost": "not_available: account tariff unverified",
+      "regression": {
+        "normal_acceptance": {
+          "numerator": 23,
+          "denominator": 40,
+          "rate": 0.575
+        },
+        "invalid_blocking": {
+          "numerator": 20,
+          "denominator": 20,
+          "rate": 1.0
+        }
+      },
+      "new_holdout": {
+        "normal_acceptance": {
+          "numerator": 5,
+          "denominator": 8,
+          "rate": 0.625
+        },
+        "invalid_blocking": {
+          "numerator": 8,
+          "denominator": 8,
+          "rate": 1.0
+        }
+      },
+      "errors": {
+        "semantic_target_mismatch": 7,
+        "invalid_plan_json": 1,
+        "semantic_plan_mismatch": 8
+      }
+    },
+    "after": {
+      "pipeline_attempts": 76,
+      "api_attempts": 44,
+      "normal_pipeline_acceptance": {
+        "numerator": 44,
+        "denominator": 48,
+        "rate": 0.9167
+      },
+      "normal_adapter_coverage": {
+        "numerator": 44,
+        "denominator": 48,
+        "rate": 0.9167
+      },
+      "invalid_request_blocking": {
+        "numerator": 28,
+        "denominator": 28,
+        "rate": 1.0
+      },
+      "invalid_request_adapter_veto": {
+        "numerator": 28,
+        "denominator": 28,
+        "rate": 1.0
+      },
+      "plan_schema_validity": {
+        "numerator": 44,
+        "denominator": 44,
+        "rate": 1.0
+      },
+      "model_output_admission": {
+        "numerator": 44,
+        "denominator": 44,
+        "rate": 1.0
+      },
+      "mechanical_appropriate_actual_outputs": {
+        "numerator": 44,
+        "denominator": 44,
+        "rate": 1.0
+      },
+      "normal_end_to_end_mechanical_pass": {
+        "numerator": 44,
+        "denominator": 48,
+        "rate": 0.9167
+      },
+      "inappropriate_admitted": 0,
+      "internal_cue_despite_policy_denial": {
+        "numerator": 0,
+        "denominator": 316,
+        "rate": 0.0
+      },
+      "initial_false_completion": {
+        "numerator": 0,
+        "denominator": 44,
+        "rate": 0.0
+      },
+      "token_usage": {
+        "prompt_tokens": 134002,
+        "completion_tokens": 11005,
+        "total_tokens": 145007
+      },
+      "usage_coverage": {
+        "numerator": 44,
+        "denominator": 44,
+        "rate": 1.0
+      },
+      "per_call_latency_ms": {
+        "n": 44,
+        "p50": 1677.9,
+        "p95": 2536.4
+      },
+      "pipeline_latency_ms": {
+        "n": 76,
+        "p50": 1314.4,
+        "p95": 1823.8
+      },
+      "human_review": "not_run",
+      "actual_ui_exposure": "not_run",
+      "cost": "not_available: account tariff unverified",
+      "regression": {
+        "normal_acceptance": {
+          "numerator": 36,
+          "denominator": 40,
+          "rate": 0.9
+        },
+        "invalid_blocking": {
+          "numerator": 20,
+          "denominator": 20,
+          "rate": 1.0
+        }
+      },
+      "new_holdout": {
+        "normal_acceptance": {
+          "numerator": 8,
+          "denominator": 8,
+          "rate": 1.0
+        },
+        "invalid_blocking": {
+          "numerator": 8,
+          "denominator": 8,
+          "rate": 1.0
+        }
+      },
+      "errors": {}
+    },
+    "actual_api_calls": 88,
+    "distinct_response_ids": 88,
+    "separate_development_probe_calls": 1,
+    "normal_admission_delta_percentage_points": 33.33,
+    "gained": [
+      {
+        "source": null,
+        "case_id": "d04_door_button_missing",
+        "sample": 1
+      },
+      {
+        "source": null,
+        "case_id": "d05_door_buttons_ambiguous",
+        "sample": 1
+      },
+      {
+        "source": null,
+        "case_id": "d08_bottle_missing",
+        "sample": 1
+      },
+      {
+        "source": null,
+        "case_id": "h02_book_grasp_blocked",
+        "sample": 1
+      },
+      {
+        "source": null,
+        "case_id": "h03_pen_missing",
+        "sample": 1
+      },
+      {
+        "source": null,
+        "case_id": "v2_h03_pen_bag",
+        "sample": 1
+      },
+      {
+        "source": null,
+        "case_id": "v2_h04_blue_mug",
+        "sample": 1
+      },
+      {
+        "source": null,
+        "case_id": "v3_h02_mug_basket",
+        "sample": 1
+      },
+      {
+        "source": null,
+        "case_id": "d04_door_button_missing",
+        "sample": 2
+      },
+      {
+        "source": null,
+        "case_id": "d08_bottle_missing",
+        "sample": 2
+      },
+      {
+        "source": null,
+        "case_id": "h02_book_grasp_blocked",
+        "sample": 2
+      },
+      {
+        "source": null,
+        "case_id": "h03_pen_missing",
+        "sample": 2
+      },
+      {
+        "source": null,
+        "case_id": "v2_h02_towel_box",
+        "sample": 2
+      },
+      {
+        "source": null,
+        "case_id": "v2_h03_pen_bag",
+        "sample": 2
+      },
+      {
+        "source": null,
+        "case_id": "v3_h02_mug_basket",
+        "sample": 2
+      },
+      {
+        "source": null,
+        "case_id": "v3_h03_blue_mug_box",
+        "sample": 2
+      }
+    ],
+    "lost": []
+  },
+  "mock_replay": {
+    "actual_api_calls": 0,
+    "before": {
+      "pipeline_attempts": 72,
+      "api_attempts": 0,
+      "normal_pipeline_acceptance": {
+        "numerator": 35,
+        "denominator": 64,
+        "rate": 0.5469
+      },
+      "normal_adapter_coverage": {
+        "numerator": 60,
+        "denominator": 64,
+        "rate": 0.9375
+      },
+      "invalid_request_blocking": {
+        "numerator": 8,
+        "denominator": 8,
+        "rate": 1.0
+      },
+      "invalid_request_adapter_veto": {
+        "numerator": 8,
+        "denominator": 8,
+        "rate": 1.0
+      },
+      "plan_schema_validity": {
+        "numerator": 57,
+        "denominator": 60,
+        "rate": 0.95
+      },
+      "model_output_admission": {
+        "numerator": 35,
+        "denominator": 60,
+        "rate": 0.5833
+      },
+      "mechanical_appropriate_actual_outputs": {
+        "numerator": 35,
+        "denominator": 60,
+        "rate": 0.5833
+      },
+      "normal_end_to_end_mechanical_pass": {
+        "numerator": 35,
+        "denominator": 64,
+        "rate": 0.5469
+      },
+      "inappropriate_admitted": 0,
+      "internal_cue_despite_policy_denial": {
+        "numerator": 0,
+        "denominator": 250,
+        "rate": 0.0
+      },
+      "initial_false_completion": {
+        "numerator": 0,
+        "denominator": 35,
+        "rate": 0.0
+      },
+      "token_usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0
+      },
+      "usage_coverage": {
+        "numerator": 0,
+        "denominator": 60,
+        "rate": 0.0
+      },
+      "per_call_latency_ms": {
+        "n": 60,
+        "p50": 9.8,
+        "p95": 19.0
+      },
+      "pipeline_latency_ms": {
+        "n": 72,
+        "p50": 8.8,
+        "p95": 18.7
+      },
+      "human_review": "not_run",
+      "actual_ui_exposure": "not_run",
+      "cost": "not_available: account tariff unverified",
+      "regression": {
+        "normal_acceptance": {
+          "numerator": 35,
+          "denominator": 64,
+          "rate": 0.5469
+        },
+        "invalid_blocking": {
+          "numerator": 8,
+          "denominator": 8,
+          "rate": 1.0
+        }
+      },
+      "new_holdout": {
+        "normal_acceptance": {
+          "numerator": 0,
+          "denominator": 0,
+          "rate": null
+        },
+        "invalid_blocking": {
+          "numerator": 0,
+          "denominator": 0,
+          "rate": null
+        }
+      },
+      "errors": {
+        "semantic_target_mismatch": 11,
+        "invalid_plan_json": 3,
+        "semantic_plan_mismatch": 10,
+        "invalid_target_roles": 1
+      }
+    },
+    "after": {
+      "pipeline_attempts": 72,
+      "api_attempts": 0,
+      "normal_pipeline_acceptance": {
+        "numerator": 37,
+        "denominator": 64,
+        "rate": 0.5781
+      },
+      "normal_adapter_coverage": {
+        "numerator": 60,
+        "denominator": 64,
+        "rate": 0.9375
+      },
+      "invalid_request_blocking": {
+        "numerator": 8,
+        "denominator": 8,
+        "rate": 1.0
+      },
+      "invalid_request_adapter_veto": {
+        "numerator": 8,
+        "denominator": 8,
+        "rate": 1.0
+      },
+      "plan_schema_validity": {
+        "numerator": 57,
+        "denominator": 60,
+        "rate": 0.95
+      },
+      "model_output_admission": {
+        "numerator": 37,
+        "denominator": 60,
+        "rate": 0.6167
+      },
+      "mechanical_appropriate_actual_outputs": {
+        "numerator": 37,
+        "denominator": 60,
+        "rate": 0.6167
+      },
+      "normal_end_to_end_mechanical_pass": {
+        "numerator": 37,
+        "denominator": 64,
+        "rate": 0.5781
+      },
+      "inappropriate_admitted": 0,
+      "internal_cue_despite_policy_denial": {
+        "numerator": 0,
+        "denominator": 260,
+        "rate": 0.0
+      },
+      "initial_false_completion": {
+        "numerator": 0,
+        "denominator": 37,
+        "rate": 0.0
+      },
+      "token_usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0
+      },
+      "usage_coverage": {
+        "numerator": 0,
+        "denominator": 60,
+        "rate": 0.0
+      },
+      "per_call_latency_ms": {
+        "n": 60,
+        "p50": 12.2,
+        "p95": 26.1
+      },
+      "pipeline_latency_ms": {
+        "n": 72,
+        "p50": 9.1,
+        "p95": 25.8
+      },
+      "human_review": "not_run",
+      "actual_ui_exposure": "not_run",
+      "cost": "not_available: account tariff unverified",
+      "regression": {
+        "normal_acceptance": {
+          "numerator": 37,
+          "denominator": 64,
+          "rate": 0.5781
+        },
+        "invalid_blocking": {
+          "numerator": 8,
+          "denominator": 8,
+          "rate": 1.0
+        }
+      },
+      "new_holdout": {
+        "normal_acceptance": {
+          "numerator": 0,
+          "denominator": 0,
+          "rate": null
+        },
+        "invalid_blocking": {
+          "numerator": 0,
+          "denominator": 0,
+          "rate": null
+        }
+      },
+      "errors": {
+        "semantic_target_mismatch": 8,
+        "invalid_plan_json": 3,
+        "semantic_plan_mismatch": 11,
+        "invalid_target_roles": 1
+      }
+    },
+    "gained": [
+      {
+        "source": "e4",
+        "case_id": "d08_bottle_missing",
+        "sample": 2
+      },
+      {
+        "source": "e4_f1_v2",
+        "case_id": "v2_h04_blue_mug",
+        "sample": 2
+      }
+    ],
+    "lost": [],
+    "retained_previously_accepted": 35
+  },
+  "mock_controls": {
+    "before": {
+      "valid_accepted": 1,
+      "valid_count": 5,
+      "invalid_blocked": 16,
+      "invalid_count": 16
+    },
+    "after": {
+      "valid_accepted": 5,
+      "valid_count": 5,
+      "invalid_blocked": 16,
+      "invalid_count": 16
+    }
+  },
+  "verification": {
+    "historical_files_preserved": 12,
+    "after_sources_match": true,
+    "unchanged_review_safety_engine_sources": true,
+    "identical_paired_inputs": true,
+    "normalizations_after_live": 0,
+    "human_rating": "not_run",
+    "actual_user_ui_physical_completion": "not_run"
+  }
+}

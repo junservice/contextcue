@@ -1,8 +1,8 @@
 # ContextCue Backend Implementation Plan
 
-> **Status:** 실행 순서와 진행 상태를 관리하는 Backend 작업 문서 (2026-10-22)
-> **Current phase:** Phase 4 완료 + F1 production adapter 연결 및 후속 E4 실측 완료 (2026-10-22). 60 시도/실제 Nebius 36회, 정상 수용 22/40·보류 필요 차단 20/20; E4 전체는 개선 필요
-> **Next task:** F3의 target/effect 품질, F2 역할/참조, F4 모델 보류 사유 및 요청 문법 coverage 검토. Phase 5 API/세션·공개 API/Frontend 연결은 미구현 유지
+> **Status:** 실행 순서와 진행 상태를 관리하는 Backend 작업 문서 (2026-10-23)
+> **Current phase:** Phase 5 완료 — versioned Task API·단일 프로세스 메모리 세션·버전/이벤트 중복 경계 구현. 전체 pytest 693개·Ruff·Frontend typecheck/build 통과. E4 전체는 기존 `evaluated_needs_improvement` 유지
+> **Next task:** Phase 6의 Frontend 및 인증된 Observation/Evidence 연결을 별도 작업으로 진행. 이번 작업에서는 Phase 6에 착수하지 않음. 기존 요청 coverage·모델 보류 사유 사실성·사용자 이해도/E4 독립 평가 과제도 남음
 > **Parallel task:** Nebius Early Smoke Track — `passed` (2026-10-22), 공식 public endpoint와 설정된 NVIDIA 모델에서 최소 JSON 실호출 성공
 
 이 문서는 새로운 개발 세션에서도 ContextCue Backend 작업을 안전한 순서로 이어가기 위한 실행 계획이다. 제품 범위는 `docs/PROJECT_PLAN.md`, 모듈과 데이터 경계는 `docs/SYSTEM_ARCHITECTURE.md`, 자동문 행동 기준은 `docs/scenarios/automatic-door.md`를 우선한다. 실제 구현 여부는 항상 코드와 테스트를 다시 확인한다.
@@ -751,9 +751,48 @@ Early Smoke가 `unavailable`이어도 mock provider를 이용한 planning 구조
 > pytest 582개·Ruff 통과. 자세한 F1 판정과 F2–F5 우선순위는 평가 계획 10장 참조.
 > 이 기록은 Phase 5 착수나 E4 전체 통과를 뜻하지 않는다.
 
+### E4 F3·F2 후속 보완 — 생성 제약·표기 정규화 (2026-10-23)
+
+- 독립 검토 intent에서 요청별 canonical target/qualifier·역할 key와 허용
+  action/outcome/ordered references, 대상/단계 수 schema를 생성한다. prompt에도
+  필수 결과와 최소 행동 계약을 전달한다. schema는 생성 오류 감소용이며 로컬
+  구조·전체 의미·ActionPolicy·실행 재검증을 대체하지 않는다.
+- strict 참조 검증 후 새 `normalization.py`에서 검토 identity와 정확히 일치하는
+  닫힌 표기 동의어만 정규화·audit한다. 모호한 동의어·충돌은 보류하고 참조 복구·
+  단계 추가/삭제·관찰/binding 추측을 하지 않는다. RequestReviewer, semantics,
+  ActionPolicy, Generic Engine 및 공개 계약은 변경하지 않았다.
+- 기존 E4/v2 자료 12개는 그대로 보존하고 `evaluations/e4_f2_f3_v3/`에만 신규
+  데이터/결과를 추가했다. 회귀 30 + 새 holdout 8개, 각 2회 전후 실측에서 정상
+  수용 **28/48→44/48**, 보류 요청 차단 **28/28 유지**. 별도 API 0회 Mock에서
+  정상 대조군 **1/5→5/5**, 부적절 계획 **16/16 차단 유지**다.
+- 전체 pytest **609 passed**·Ruff 통과. after 실측에서 생성 오류가 없었으나
+  문법 coverage의 정상 보류 4건·F4/F5·사람 평가·실환경 검증은 남는다.
+  세부 분모·실측 88회/개발 probe 1회·지연·한계는 `EVALUATION_PLAN.md` 11장 참조.
+  Phase 5·다른 기능 확장·commit/push는 진행하지 않았다.
+
+### E4 F4·F5 후속 보완 — 보류 계약과 대상 안내 (2026-10-23)
+
+- 모델의 엄격한 `status=abstain` 선언은 불변 `PlanAbstention` 진단과
+  `model_abstained`, legacy `{}`는 사유 없는 `model_no_plan`으로 구분한다.
+  `generate_reviewed_plan`은 confirm/no-proposal을 반환하고, 저수준 호출은
+  `PlanningAbstained(PlanningError)`로 안전하게 중단한다. 잘못된 선언·JSON,
+  empty/truncated/API 실패는 오류로 유지한다. 독립 검토와 모델 사유를 혼동하지 않는다.
+- Prompting은 기존 gate 후 지원 concept 15개와 닫힌 색상·위치를 표현하고,
+  item/container 및 passage 이름·조사를 보존한다. unknown 설명은 원문을
+  재출력하거나 속성을 버리지 않고 neutral assistance cue 하나를 반환한다.
+  의미 검증·정규화·ActionPolicy·Engine·Service·Evidence 정책은 변경하지 않았다.
+- 동일 출력 Mock 160개에서 계획 수용 결과는 유지, F4 대조군 분류 **8/13→13/13**,
+  대상/속성 포함 cue **156/489→489/489**, 정책 deny cue **0/780 유지**.
+  새 실제 Nebius 22회에서 정상 수용 **22/24**, 보류 필요 **14/14 차단**,
+  내부 cue 이름/속성 **99/99**. 이번 실측에 모델 보류 선언은 없어 사유 정확도는
+  미측정이다. 기존 평가 자산 21개는 보존했다.
+- 새 회귀 42개, 전체 pytest **649 passed**, Ruff 통과. 사용자 이해도·범위 밖
+  요청·실환경 검증은 남는다. 세부 모드/분모/한계는 `EVALUATION_PLAN.md` 12장 참조.
+  Phase 5·공개 계약·다른 기능 확장·commit/push는 진행하지 않았다.
+
 ## 11. Phase 5 — Task lifecycle API와 세션 경계
 
-**상태:** 미구현
+**상태:** 완료 (2026-10-23) — 단일 프로세스 로컬 합성 데모 범위. 실제 source 인증·Frontend UI 연결은 Phase 6 미구현
 
 **목표:** 기존 `/api/plan`을 유지하면서 Generic Task 기능을 별도 versioned API로 노출한다.
 
@@ -773,19 +812,58 @@ Early Smoke가 `unavailable`이어도 mock provider를 이용한 planning 구조
 
 **작업 순서**
 
-- [ ] in-memory server session과 재검증 가능한 stateless state 중 초기 방식을 결정
-- [ ] task 생성/조회/event 입력 endpoint 계약 확정
-- [ ] event 중복·순서 오류를 다룰 state version 규칙 결정
-- [ ] 잘못된 event와 stale observation에 안전한 응답 정의
-- [ ] `/api/plan` 계약과 status 값을 변경하지 않음
-- [ ] 새 공개 필드를 Backend/Frontend 타입과 테스트에서 함께 갱신
+- [x] in-memory server session과 재검증 가능한 stateless state 중 초기 방식을 결정 — 서버 메모리 세션 선택; client state/plan/review 업로드 금지
+- [x] task 생성/조회/event 입력 endpoint 계약 확정 — `/api/v1/tasks`, `/{task_id}`, `/{task_id}/events`, [계약 문서](TASK_API.md)·OpenAPI
+- [x] event 중복·순서 오류를 다룰 state version 규칙 결정 — 생성 v1, expected_version + event_id + 세션별 lock, 중복/불일치 409
+- [x] 잘못된 event와 stale observation에 안전한 응답 정의 — 구조 422, 전이/정책 거부는 accepted=false·안전 상태; active 조회·resume·event에 최신 context 재검증
+- [x] `/api/plan` 계약과 status 값을 변경하지 않음 — 기존 API/planner 46개 회귀 유지
+- [x] 새 공개 필드를 Backend/Frontend 타입과 테스트에서 함께 갱신 — `app/task_api.py`, `frontend/src/types.ts`, HTTP 계약 테스트
 
 **테스트 및 완료 기준**
 
-- [ ] 레거시 `/api/plan` 요청·응답이 기존과 호환된다.
-- [ ] Task API에서 pause/resume/stop/help/evidence 정상·오류 경로가 검증된다.
-- [ ] cue/manual input만으로 completed 응답이 나오지 않는다.
-- [ ] 프로세스 재시작 또는 다중 worker 한계를 문서화한다.
+- [x] 레거시 `/api/plan` 요청·응답이 기존과 호환된다.
+- [x] Task API에서 pause/resume/stop/help/evidence 정상·오류 경로가 검증된다.
+- [x] cue/manual input만으로 completed 응답이 나오지 않는다.
+- [x] 프로세스 재시작 또는 다중 worker 한계를 문서화한다.
+
+**구현 선택과 인수인계 (2026-10-23)**
+
+- 변경 파일: 신규 `app/task_api.py`, `tests/test_task_api.py`, `TASK_API.md`;
+  `app/main.py`의 router/메모리 store 연결, `frontend/src/types.ts`의 공개 타입,
+  이 계획서 및 루트 README·문서 index·architecture의 현재 API 안내.
+  이전 F2–F5의 미커밋 코드·평가 자료는 보존했다. Engine·Service·ActionPolicy·
+  요청 검토·모델 생성 계약·dependencies·기존 `/api/plan` schema/호출부는 수정하지 않았다.
+- 세션은 서버 발급 UUID task/plan ID, 원래 요청·독립 review·proposal·상태·선호와
+  event ID를 보관한다. client가 verification context를 주입하지 못한다.
+  기본 context는 객체/receipt/물리 fact가 없는 `unobserved`이며 실제 관찰을
+  만들어내지 않는다. 합성 인증 어댑터는 테스트에만 있다.
+- 생성은 독립 검토를 먼저 실행한다. 보류/거부는 provider 생성·호출 0회,
+  session=null이다. 실제 생성 경로는 기존 Nebius provider의 명시적 live 모드만
+  사용하며 실패를 demo/template으로 대체하지 않는다. F4 모델 무계획도
+  session=null로 반환한다. 이번 작업에서 실제 API 호출은 하지 않았다.
+- 이벤트는 잘못된 JSON 구조 422, 없는 과제 404, 중복 ID·버전 불일치·terminal
+  입력 409로 구분한다. 순서가 유효한 시도는 거부/hold여도 버전을 소비하고
+  반환 상태를 저장한다. 조회는 cue 없이 최신 active 상태를 재검증하며 상태가
+  바뀔 때만 버전을 증가시킨다. 같은 버전의 동시 도움 요청 중 하나만 반영했다.
+- 새 HTTP 회귀 **44개**: 생성/조회·모드·오류·보류, pause/resume/stop/refusal/help,
+  잘못된 전이/step/구조·중복/역순 버전·동시 입력, stale 관찰, 후보/무근거/다른
+  task receipt 차단 및 합성 backend receipt에 의한 완료, 다음 물리 단계의
+  true/false/unknown 능력·물리 맥락 차단, 세션 격리·재시작·한도·OpenAPI를 확인했다.
+- 실제 검사: `backend/`에서 `uv run pytest` **693 passed** (기존 649 + 신규 44),
+  `uv run ruff check .` **All checks passed!**. `frontend/`에서
+  `npm run typecheck`, `npm run build` 모두 exit code 0.
+  기존 Starlette deprecation 1개와 uv `SSL_CERT_DIR` 경고는 남는다.
+- 모드: **MOCK_PROVIDER + 합성 observation/receipt**, 기존 **DEMO_RULES** 회귀.
+  새 **LIVE_NEBIUS** 호출·실제 영상/신체 수행·UI 노출·TTS·사용자 평가는 `not_run`.
+  E4 평가 자료나 전체 판정을 변경하지 않았다.
+- 한계: 단일 process/worker 메모리이며 재시작하면 404, 여러 worker 간 공유·
+  영속 저장·계정 인증은 없다. task ID는 possession handle이며 user_id는 인증이
+  아니다. 기본 세션 100개·세션당 이벤트 1,000개 한도와 stop/refusal 예외를 둔다.
+  별도 승인/hold 해제·전체 누적 audit 저널·Frontend 렌더링·실제 source 연결은
+  추가하지 않았다. 상세 오류·버전·배포 경계는 [TASK_API.md](TASK_API.md) 참조.
+- 바로 다음 작업: **Phase 6**에서 공유 계약을 바탕으로 Frontend와 인증된
+  Observation/Evidence 경계를 설계·연결하고 두 과제의 E2E를 검증한다.
+  이번 작업에서는 다른 Phase 구현·commit/push·브랜치 전환을 하지 않았다.
 
 ## 12. Phase 6 — Frontend 및 Observation/Evidence 연결
 
@@ -863,7 +941,7 @@ Early Smoke가 `unavailable`이어도 mock provider를 이용한 planning 구조
 1. 초기 action vocabulary의 최종 이름과 세부 parameter 형식
 2. caregiver report와 camera Evidence의 충돌 및 confidence 처리
 3. 실제 target binding의 freshness/추적 기준
-4. Task API 세션 저장 방식과 state version/idempotency 계약
+4. Task API 세션 저장 방식과 state version/idempotency 계약 — Phase 5에서 초기 단일 process 메모리·버전/ID 계약 확정. 영속/분산 강화는 Phase 7 보류
 5. AI context verification 호출 기준과 latency budget
 6. Template 검토·versioning·승격 절차
 7. 실제 입력 장치, 비접촉 거부/도움 UX

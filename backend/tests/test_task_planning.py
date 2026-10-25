@@ -135,7 +135,10 @@ def test_transcript_is_serialized_as_untrusted_user_data_with_no_system_override
     assert payload["capabilities"]["can_extend_arm"] is None
     assert "untrusted" in messages[0]["content"]
     assert "Evidence" not in schema.get("$defs", {})
-    assert "object_id" not in schema["$defs"]["TargetRef"]["properties"]
+    for variant in schema["$defs"]["TargetRef"]["oneOf"]:
+        assert "object_id" not in variant["properties"]
+        assert "bbox" not in variant["properties"]
+        assert variant["additionalProperties"] is False
     assert "NEBIUS_API_KEY" not in payload
 
 
@@ -148,7 +151,6 @@ def test_transcript_is_serialized_as_untrusted_user_data_with_no_system_override
         "{",
         "[]",
         "null",
-        "{}",
         "```json\n{}\n```",
         '{"schema_version": NaN}',
         '{"goal":"one","goal":"two"}',
@@ -454,7 +456,7 @@ def test_constrained_output_still_allows_refusal_without_starting_engine(case, m
     monkeypatch.setattr(
         planning, "start_task", lambda *a, **kw: pytest.fail("no Engine on refusal")
     )
-    with pytest.raises(PlanningError, match="invalid_plan_json"):
+    with pytest.raises(PlanningError, match="model_no_plan"):
         run(data, provider)
     schema = client.calls[0]["response_format"]["json_schema"]["schema"]
     assert {"type": "object", "properties": {}, "additionalProperties": False} in schema["anyOf"]

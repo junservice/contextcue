@@ -24,7 +24,12 @@ Service 진행과 Prompting도 의미를 재검증하며 Engine에는 과제별 
 않는다. 후속 `ControlledRequestReviewer`는 제한된 영어 요청 전체를 해석하고
 goal과 대조하며 `generate_reviewed_plan`을 통해 실제 Nebius provider에 연결된다.
 지원하지 않는 자유문장·위험·거부는 확인/중단으로 보류한다. 아래 흐름은 기존
-공개 API/Frontend 스냅샷이며, 새 Task API·세션·검토 UI를 구현했다는 뜻이 아니다.
+공개 API/Frontend의 이전 스냅샷이다. **2026-10-23 Phase 5**에서 별도
+`/api/v1/tasks` 생성·조회·event API와 단일 process 메모리 세션을 추가했다.
+독립 review와 상태는 서버가 보관하고 각 호출은 기존 Service/검증 경계를 따른다.
+공개 모델은 `backend/app/task_api.py`, TS 미러는 `frontend/src/types.ts`,
+정확한 버전·오류·관찰/인증 한계는 [Task API 계약](../backend/TASK_API.md)을 따른다.
+Frontend UI·실제 관찰/Evidence source 연결은 Phase 6 미구현이다.
 
 ```mermaid
 flowchart LR
@@ -122,6 +127,20 @@ flowchart TD
 **중요:** 지금의 `bbox`가 화면에 등장한다고 해서 실제 검출이 이루어진 것은 아니다. `LIVE_NEBIUS`는 언어 모델 호출 모드를 뜻하며 실제 카메라 모드를 뜻하지 않는다. 모의 장면이 아닌 실제 장면을 지원할 때 `scene_mode`의 계약부터 양측에서 함께 변경해야 한다.
 
 **Frontend 미러:** `frontend/src/types.ts`. 타입·필드·status를 변경할 때는 Backend·Frontend·계약 테스트를 같은 변경 단위로 맞춘다.
+
+### Phase 5 추가 계약 — `/api/v1/tasks`
+
+- `POST /api/v1/tasks`: goal/transcript/기존 profile로 독립 검토와 AI 계획을 요청한다.
+  승인 시 서버 session을 만들고, 보류/거부·모델 무계획은 session=null이다.
+  provider는 명시적 live 모드이며 demo/template fallback은 없다.
+- `GET /api/v1/tasks/{task_id}`: 현재 active 상태를 최신 backend context로 재검증한다.
+  cue를 재발행하지 않는다. 상태 변경 시 version을 갱신한다.
+- `POST /api/v1/tasks/{task_id}/events`: event_id + expected_version + candidate event를
+  세션 lock 안에서 검사한다. 중복/버전 충돌은 409, 구조 오류는 422다.
+  cue/manual input으로 완료하지 않고, Evidence는 기존 receipt 검증을 따른다.
+- 기본 context는 미관찰·receipt/물리 fact 없음이다. 실제 source 인증과 계정
+  인증은 아직 없으며 로컬 합성 데모에 한정한다. 메모리는 단일 worker 범위이며
+  재시작하면 소실된다. [상세 계약·한도·검증](../backend/TASK_API.md) 참조.
 
 ## 5. Generic Task Plan·상태 계약 — 설계안, 미구현
 
@@ -280,7 +299,7 @@ backend/
 2. 관찰 이벤트에 필요한 타임스탬프·신뢰도·장면 출처 및 서로 충돌하는 Evidence 처리.
 3. target binding의 freshness/객체 추적 기준과 카메라 bbox/UI 좌표계의 정합성.
 4. 실제 보조자 확인 이벤트 UX와 보존 기간.
-5. Task API의 세션 저장·state version·idempotency 계약.
+5. Task API의 세션 저장·state version·idempotency 계약 — Phase 5의 초기 메모리/버전/중복 ID 규칙은 [확정](../backend/TASK_API.md); 영속·분산 강화는 후속 범위.
 6. Hybrid Verification에서 별도 AI 호출을 사용할 기준, 지연·비용과 정확도 평가 방법.
 7. 검증된 Task Template을 생성·수정·versioning·승격하는 절차.
 8. LTM 도움 증가와 Prompt Fading 감소에 필요한 반복 Evidence 기준.
