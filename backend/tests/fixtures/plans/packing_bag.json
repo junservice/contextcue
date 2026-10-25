@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "plan_id": "packing-bag-demo",
+  "goal": "pack_bag",
+  "targets": [
+    {"target_key": "bag", "concept": "bag"},
+    {"target_key": "bottle", "concept": "water_bottle"}
+  ],
+  "steps": [
+    {
+      "step_id": "locate_bag",
+      "action": "locate",
+      "target_keys": ["bag"],
+      "completion_goal": {"outcome": "target_located", "target_keys": ["bag"]}
+    },
+    {
+      "step_id": "locate_bottle",
+      "action": "locate",
+      "target_keys": ["bottle"],
+      "completion_goal": {"outcome": "target_located", "target_keys": ["bottle"]}
+    },
+    {
+      "step_id": "place_bottle",
+      "action": "place_inside",
+      "target_keys": ["bottle", "bag"],
+      "completion_goal": {"outcome": "placed_inside", "target_keys": ["bottle", "bag"]}
+    },
+    {
+      "step_id": "verify_items",
+      "action": "observe_state",
+      "target_keys": ["bottle", "bag"],
+      "completion_goal": {"outcome": "items_inside", "target_keys": ["bottle", "bag"]}
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "plan_id": "automatic-door-demo",
+  "goal": "pass_through_door",
+  "targets": [
+    {"target_key": "open_button", "concept": "door_open_button"},
+    {"target_key": "doorway", "concept": "automatic_door_opening"}
+  ],
+  "steps": [
+    {
+      "step_id": "locate_button",
+      "action": "locate",
+      "target_keys": ["open_button"],
+      "completion_goal": {"outcome": "target_located", "target_keys": ["open_button"]}
+    },
+    {
+      "step_id": "press_button",
+      "action": "press",
+      "target_keys": ["open_button"],
+      "completion_goal": {"outcome": "pressed", "target_keys": ["open_button"]}
+    },
+    {
+      "step_id": "confirm_open",
+      "action": "observe_state",
+      "target_keys": ["doorway"],
+      "completion_goal": {"outcome": "state_open", "target_keys": ["doorway"]}
+    },
+    {
+      "step_id": "pass_through",
+      "action": "traverse",
+      "target_keys": ["doorway"],
+      "completion_goal": {"outcome": "passed_through", "target_keys": ["doorway"]}
+    }
+  ]
+}

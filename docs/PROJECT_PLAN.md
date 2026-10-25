@@ -1,8 +1,9 @@
 # ContextCue — Project Plan
 
-> **Status:** 공동 개발 기준 문서 (2026-10-21, v0.2)
+> **Status:** 공동 개발 기준 문서 (2026-10-21, v0.4)
 > **Origin:** Nebius × NVIDIA Global AI Hackathon
 > **Reading rule:** 이 문서는 제품 목표·MVP 범위를 정의한다. 실제 구현 여부는 각 절의 상태와 저장소 코드를 확인한다. 설계 목표를 이미 완성된 기능으로 소개하지 않는다.
+> Backend의 단계별 구현 순서와 체크 상태는 [`backend/IMPLEMENTATION_PLAN.md`](../backend/IMPLEMENTATION_PLAN.md)에서 관리한다.
 
 ## 1. 한 문장 정의와 문제
 
@@ -30,6 +31,8 @@ ContextCue는 **지적장애와 운동장애가 함께 있는 사용자를 우�
 5. **Closed loop, evidence aware:** 안내 출력, 단계의 수동 진행, 실제 행동 수행, 보호자 보고, 카메라 관찰을 별도 사건으로 기록한다. 보이지 않은 행동을 성공으로 추정하지 않는다.
 6. **Choice, refusal and human oversight:** 거부·위험·불확실·신체적 불가능성은 확인, 일시정지, 중단 또는 보조자 인계로 이어져야 한다.
 7. **Device-agnostic:** Backend의 판단·상태·안전 로직과 Frontend의 표현을 분리한다. 터치 조작을 유일한 입력으로 가정하지 않는다.
+8. **Generalizable planning and execution:** 새로운 과제마다 전용 Python 실행기를 작성하지 않고, AI가 구조화된 `TaskPlan`을 제안하고 범용 엔진이 상태와 도움을 관리한다. 반복 과제는 검증된 데이터 Template으로 재사용한다.
+9. **Hybrid Verification:** 근거 기반 AI 맥락 추론과 명시적 제약 검사를 결합한다. 별도의 검증 에이전트는 검증을 거쳐 선택하며, 근거 없는 신체 수행 가능성이나 성공은 단정하지 않는다.
 
 ## 4. 핵심 기능과 우선순위
 
@@ -37,8 +40,8 @@ ContextCue는 **지적장애와 운동장애가 함께 있는 사용자를 우�
 |---|---|---|---|
 | F-01 | 기능 프로필 | A/B의 서로 다른 능력 및 안내 선호 사용 | Frontend 설정 및 Backend 스키마 있음; 영구 저장 없음 |
 | F-02 | 맥락/대상 해석 | 관찰된 대상과 과제 의도 연결 | `/api/plan` 단일 단서의 데모 규칙 및 선택적 LLM 호출 코드 |
-| F-03 | 신체 가능성 검증 | 불가능/미확인 동작 지시 차단 | 부분 구현; 복수 능력 조건 미완성 |
-| F-04 | 단계별 지원 | Least-to-Most와 pause/stop/help | 가방 데모는 Frontend 로컬 구현; 자동문 Backend 엔진 미구현 |
+| F-03 | 신체 가능성 검증 | 명시적 제약 검사 + 환경·도달 가능성의 근거 기반 평가 | `f43171a`에서 자동문 관련 두 능력 검사 구현; 실제 도달 판단·Hybrid Verification 미구현 |
+| F-04 | 범용 Task 지원 | AI 구조화 계획 + 과제 독립 엔진, Least-to-Most와 pause/stop/help | 가방 데모는 Frontend 로컬 구현; Generic Backend Task Engine 및 동적 계획 미구현 |
 | F-05 | 행동 결과 검증 | 관찰 출처와 실제 완료를 분리 | 시나리오 문서만 있음; 자동 검증 미구현 |
 | F-06 | 실장면 지각 | 카메라/이미지에서 근거 있는 위치 생성 | 모의 `DEMO_SCENE`만 있음 |
 | F-07 | 적응/기억 | 도움 이력 보존·증거 기반 prompt fading | 후속 개발, 미구현 |
@@ -67,6 +70,7 @@ ContextCue는 **지적장애와 운동장애가 함께 있는 사용자를 우�
 - 실제 Nebius Token Factory + NVIDIA 모델 호출에 대해 재현 가능한 성공 로그가 있고, `DEMO_RULES`와 `LIVE_NEBIUS`를 명확히 구분한다.
 - 시각 강조는 관찰 데이터의 유효한 객체 좌표에만 나타난다. 카메라/검출기 연결 전에는 `DEMO_SCENE`임을 명시한다.
 - 적어도 정상·불확실·불가능·중단 경로를 합성 데이터로 검증한다.
+- 자동문과 가방 챙기기를 서로 다른 TaskPlan 데이터로 처리할 때 **범용 엔진 내부의 시나리오별 코드 변경이 불필요함**을 테스트한다. 이는 일반 상황에서의 안전성·효능을 입증하는 것이 아니다.
 
 ## 6. 단계별 작업 및 완료 판단
 
@@ -74,12 +78,12 @@ ContextCue는 **지적장애와 운동장애가 함께 있는 사용자를 우�
 |---|---|---|
 | M0 — 문서·계약 정렬 | 계획서·아키텍처·시나리오·현재 API의 차이 정리 | 문서 상호 링크, 합의된 변경 단위 |
 | M1 — 안전한 단일 단서 | 자동문 버튼의 운동 능력/객체 검증 보강 | Backend 성공/실패 단위 테스트 |
-| M2 — 실제 모델 검증 | 사용 가능한 Nemotron 모델·엔드포인트·JSON 출력 확인 | 모의 호출이 아닌 실제 API 로그와 오류 처리 |
-| M3 — 자동문 Task Engine | 상태 전이·Least-to-Most·도움 요청·결과 근거 표현 | 단계·취소·불확실성 상태 전이 테스트 |
+| M2 — 실제 모델 검증 | Phase 1과 병행 가능한 early smoke로 접근 권한·연결·최소 JSON을 먼저 확인하고, AI Planner 단계에서 TaskPlan 크기의 구조화 출력 재검증 | 모의 호출이 아닌 실제 API 결과와 오류 유형 기록; 실패해도 로컬 Generic Task Engine 개발은 계속 |
+| M3 — Generic Task Engine | 의미적 target/binding을 분리한 TaskPlan, 순수 상태 전이, Least-to-Most, trusted 완료 정책 구현 (자동문 대표, 가방 챙기기 교차 테스트) | object ID 없는 두 Task 데이터로 동일 엔진 테스트, cue/manual/AI 판단에 의한 허위 완료 방지 |
 | M4 — UI 연결 및 지각 | Frontend에 Task Engine 연결, 실제 검출 입력 실험 | 사용자 A/B 및 장면 변경의 End-to-End 시연 |
 | M5 — 평가·발표 | 회귀 QA·데모 근거·제한사항 정리 | 테스트 기록, 재현 가능한 시연·문서 |
 
-**진행 상태:** 2026-10-21 GitHub `main` 조사 기준, 초기 Scaffold·Frontend 프로필/가방 데모·`/api/plan` 및 CI는 존재한다. M1 이후의 완료를 주장할 증거는 아직 확보하지 않았다. 이 표는 기간 약속이 아닌 의존성 중심의 순서다.
+**진행 상태:** 2026-10-21 GitHub `main` 조사 기준 초기 Scaffold·Frontend 프로필/가방 데모·`/api/plan` 및 CI는 존재한다. `f43171a`에 M1의 신체 능력 검사 개선이 반영됐으나 실제 버튼 도달 검증과 M2 이후의 완료는 주장할 수 없다. M2 early smoke는 M3의 로컬 모델/엔진 구현과 병행할 수 있으며, 접근 실패가 M3을 차단하지 않는다. 이 표는 기간 약속이 아닌 의존성 중심의 순서다.
 
 ## 7. 품질·평가
 
@@ -101,7 +105,7 @@ ContextCue는 **지적장애와 운동장애가 함께 있는 사용자를 우�
 1. 사용자에게 안내를 보여줄 실제 장치와 비접촉 입력/거부 방식.
 2. 이미지/카메라 검출기의 선택, 좌표 신뢰도 기준 및 객체 추적 전략.
 3. 단계별 행동 관찰의 증거 모델과 보호자 확인 UX.
-4. Task Engine의 API 계약과 세션 보관 범위.
+4. 범용 TaskPlan의 핵심 방향은 단일 `tasking/` 패키지, 의미적 `TargetRef`/검증된 `TargetBinding`, trusted completion, 순수 상태 전이로 합의했다. 정확한 Task API 계약과 세션 보관 범위는 미결이다.
 5. 장기 기억 및 prompt fading의 신뢰도 기준·적용 시점.
 6. 실제 접근 가능한 Nemotron 모델 ID 및 비용·지연.
 

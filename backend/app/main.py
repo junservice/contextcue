@@ -8,9 +8,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .planner import plan
 from .schemas import PlanRequest, PlanResponse
+from .task_api import TaskSessions
+from .task_api import router as task_router
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 app = FastAPI(title="ContextCue API", version="0.1.0")
+app.state.task_sessions = TaskSessions()
+app.include_router(task_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],

@@ -1,0 +1,28 @@
+{
+  "mode": "LIVE_NEBIUS",
+  "track": "schema_compatibility_only",
+  "started_at_utc": "2026-10-23T06:43:40.177118+00:00",
+  "proposal_admitted": true,
+  "model_id": "nvidia/Nemotron-3_5-Lightning",
+  "transport": {
+    "response_id": "chatcmpl-c89708605216c292ed842e7f76a840d5",
+    "returned_model": "nvidia/Nemotron-3_5-Lightning",
+    "finish_reason": "stop",
+    "usage": {
+      "completion_tokens": 290,
+      "prompt_tokens": 3227,
+      "total_tokens": 3517,
+      "completion_tokens_details": {
+        "accepted_prediction_tokens": null,
+        "audio_tokens": null,
+        "reasoning_tokens": 0,
+        "rejected_prediction_tokens": null
+      },
+      "prompt_tokens_details": null,
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 3227
+    }
+  },
+  "output": "{\"schema_version\": \"1.0\", \"plan_id\": \"e4-development-schema-probe-1\", \"goal\": \"store_towel_in_basket\", \"targets\": [{\"target_key\": \"item\", \"concept\": \"towel\", \"qualifiers\": {}}, {\"target_key\": \"container\", \"concept\": \"basket\", \"qualifiers\": {}}], \"steps\": [{\"step_id\": \"locate_towel\", \"action\": \"locate\", \"target_keys\": [\"item\"], \"completion_goal\": {\"outcome\": \"target_located\", \"target_keys\": [\"item\"]}}, {\"step_id\": \"locate_basket\", \"action\": \"locate\", \"target_keys\": [\"container\"], \"completion_goal\": {\"outcome\": \"target_located\", \"target_keys\": [\"container\"]}}, {\"step_id\": \"put_towel_in_basket\", \"action\": \"place_inside\", \"target_keys\": [\"item\",\"container\"], \"completion_goal\": {\"outcome\": \"placed_inside\", \"target_keys\": [\"item\",\"container\"]}}, {\"step_id\": \"check_inside\", \"action\": \"observe_state\", \"target_keys\": [\"item\",\"container\"], \"completion_goal\": {\"outcome\": \"items_inside\", \"target_keys\": [\"item\",\"container\"]}}]}",
+  "schema_sha256": "f61d9d1144d2bd86dd0679e24d76aade66996cca6dd9b89bce1ba997f883a85a"
+}
